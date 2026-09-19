@@ -1,6 +1,6 @@
 # Manuale funzionale — Plumber Diary
 
-Versione: 1.1.0 — 2026-09-19 23:10 UTC (v1.0.0 — 2026-09-19 22:27 UTC: prima stesura, vedi changelog.md)
+Versione: 1.2.0 — 2026-09-19 23:35 UTC (v1.1.0 — 2026-09-19 23:10 UTC, v1.0.0 — 2026-09-19 22:27 UTC: stesure precedenti, vedi changelog.md)
 
 ## Cos'è
 
@@ -14,7 +14,9 @@ Plumber Diary è un'app Android che traccia automaticamente dove sei stato duran
    - correggere manualmente gli orari di inizio/fine;
    - scrivere una nota libera sull'intervento;
    - aggiungere gli articoli/materiali usati;
+   - allegare foto dell'intervento dalla galleria del telefono;
    - creare un promemoria collegato su Google Calendar.
+   Se un intervento ha foto allegate, queste vengono incluse **in alta risoluzione** nella mail di recap che va all'amministrazione — non nella versione compressa usata per la visualizzazione in app.
 3. **Anagrafica cliente**: dati anagrafici (nome/ragione sociale, telefono, P.IVA/C.F., indirizzo), foto allegate dalla galleria del telefono (es. contatore, impianto, prima/dopo intervento), elenco delle posizioni note collegate, listino articoli (codice, descrizione, prezzo, quantità) usato negli interventi, ed email dedicata per l'invio del mandatino ore.
 4. **Mandatino delle ore (PDF)**: dalla scheda cliente puoi generare un PDF con ore e materiali del periodo e inviarlo all'email del cliente. L'invio richiede sempre una conferma esplicita: l'app mostra un riepilogo (periodo, ore, materiali, destinatario) e invia solo dopo che premi "Conferma e invia".
 5. **Storico**: nel menu Opzioni puoi rivedere i recap dei giorni precedenti ed effettuare correzioni massive (es. riassegnare un cliente a più giornate, correggere il nome di una posizione ricorrente).
@@ -24,7 +26,7 @@ Plumber Diary è un'app Android che traccia automaticamente dove sei stato duran
 
 - **Orario invio recap**: a che ora ricevere la notifica di riepilogo serale.
 - **Soglia rilevamento cliente**: minuti di permanenza oltre i quali una posizione è proposta come nuovo possibile cliente (default 15 minuti).
-- **Invio recap via email**: attivo di default, inoltra il riepilogo giornaliero a un indirizzo di amministrazione configurabile.
+- **Invio recap via email**: attivo di default, inoltra il riepilogo giornaliero a un indirizzo di amministrazione configurabile, con eventuali foto degli interventi allegate in alta risoluzione (se troppe/pesanti per un unico allegato, arrivano come link di download sicuro nel corpo della mail).
 - **Google Calendar**: collegamento dell'account per creare promemoria dal recap.
 - **Tracciamento posizione**: attivazione/disattivazione del tracciamento in background.
 - **Recap giorni precedenti**: accesso allo storico per correzioni massive.

@@ -1,6 +1,6 @@
 # Context — Plumber Diary
 
-Versione: 1.1.0 — 2026-09-19 23:10 UTC (v1.0.0 — 2026-09-19 22:27 UTC: prima stesura, vedi changelog.md)
+Versione: 1.2.0 — 2026-09-19 23:35 UTC (v1.1.0 — 2026-09-19 23:10 UTC, v1.0.0 — 2026-09-19 22:27 UTC: stesure precedenti, vedi changelog.md)
 
 ## Obiettivo
 
@@ -33,6 +33,7 @@ Categorie di app esistenti, nessuna copre esattamente il caso d'uso (permanenza 
 9. Anagrafica cliente: campo email dedicato per l'invio del **"mandatino delle ore"** — un PDF con riepilogo ore e materiali dell'intervento/periodo, inviato solo dopo conferma esplicita dell'utente (mai automatico).
 10. Anagrafica cliente: possibilità di allegare foto scelte dalla galleria del telefono (non solo fotocamera).
 11. **Multiutente / squadra**: più utenti possono far parte della stessa squadra. Ogni utente vede su una mappa condivisa dove si trovano gli altri membri della squadra durante la giornata. Un'opzione (spenta di default) permette di vedere anche i recap serali già confermati dagli altri membri. **Anagrafica clienti e listino articoli sono condivisi**: un'unica fonte per tutta la squadra, non duplicati per utente.
+12. Le foto (allegate a un intervento/posizione o alla scheda cliente) devono arrivare **in alta risoluzione** nella mail di recap giornaliero inviata all'amministrazione — non nella versione compressa usata per l'archiviazione/sync in app.
 
 ## Decisioni di progetto
 
@@ -40,10 +41,13 @@ Categorie di app esistenti, nessuna copre esattamente il caso d'uso (permanenza 
 - **Rilevamento posizione**: `FusedLocationProviderClient` con `LocationRequest` a priorità bilanciata + significant-motion/activity recognition per ridurre consumo; clustering delle posizioni (raggio configurabile, es. 80–120 m) per formare le "soste".
 - **Riconoscimento cliente**: matching per posizione nota (raggio + tolleranza GPS) su storico interventi; se il tempo di sosta supera la soglia (default 15 min) e la posizione non è nota, viene proposta come "nuovo possibile cliente" nel recap.
 - **Recap serale**: notifica push all'orario configurato; schermata riepilogo editabile (orari, cliente, note, materiali, promemoria) con conferma finale.
-- **Invio email recap**: job schedulato che genera il riepilogo testuale/PDF e lo invia all'indirizzo amministrazione impostato nelle opzioni (default ON).
+- **Invio email recap**: job schedulato che genera il riepilogo testuale/PDF e lo invia all'indirizzo amministrazione impostato nelle opzioni (default ON), allegando in **alta risoluzione** ogni foto presente sulle posizioni/interventi del giorno (vedi "Foto" sotto per come si gestiscono dimensione allegati e cancellazione dell'originale dopo l'invio).
 - **Mandatino ore PDF**: generato on-demand dalla scheda cliente, sempre con step di conferma esplicito (dialog con riepilogo periodo/ore/materiali/destinatario) prima dell'invio.
 - **Privacy**: retention storico posizioni configurabile (default 12 mesi), permessi Android per posizione in background richiesti in modo esplicito e progressivo (foreground prima, poi background con spiegazione).
-- **Foto cliente**: selezione da galleria tramite `ActivityResultContracts.PickMultipleVisualMedia` (Photo Picker di sistema — non richiede il permesso `READ_MEDIA_IMAGES` su Android 13+), immagini compresse/ridimensionate lato client prima dell'upload (vedi limiti storage sotto).
+- **Foto (cliente e/o intervento)**: selezione da galleria tramite `ActivityResultContracts.PickMultipleVisualMedia` (Photo Picker di sistema — non richiede il permesso `READ_MEDIA_IMAGES` su Android 13+). **Doppia risoluzione per ogni foto**:
+  - una copia **originale in alta risoluzione**, caricata su Firebase Storage in un percorso separato (`.../photos/{photoId}/original.jpg`), usata **solo** per l'allegato nella mail di recap giornaliero e cancellata dopo l'invio riuscito (o dopo un periodo di grazia configurabile, per permettere un reinvio in caso di errore) — non resta a occupare spazio a tempo indeterminato;
+  - una copia **compressa/ridimensionata** (`.../photos/{photoId}/display.jpg`, ~300–500 KB, lato lungo ~1600px), questa sì conservata stabilmente per la visualizzazione in app (scheda cliente, storico) e per la sincronizzazione fra i membri della squadra (banda/traffico contenuti).
+  - L'email di recap allega/incorpora quindi sempre l'originale ad alta risoluzione quando presente; se il totale allegati supera una soglia pratica (i provider email in genere limitano un messaggio a ~20–25 MB), l'invio passa automaticamente da allegati diretti a **link di download sicuro e a scadenza** (URL firmato generato dal backend, valido pochi giorni) elencati nel corpo della mail — mai foto scartate o inviate a risoluzione ridotta senza che l'utente lo sappia.
 - **Multiutente/squadra**: un utente crea una squadra e invita colleghi (link di invito / codice); anagrafica clienti e listino articoli sono collezioni condivise a livello di squadra, non per singolo utente. Le posizioni/i recap restano invece per-utente (ognuno traccia se stesso), ma sono leggibili dagli altri membri della squadra secondo le due opzioni indipendenti: "vedi posizione squadra" (mappa live, pensata per essere per-utente ma di default ragionevole ON) e "vedi recap colleghi" (default **OFF**, dato che è un dato più sensibile — orari e clienti visitati da altri — va attivato consapevolmente).
 
 ## Architettura backend e riuso da progetto gemello (gwatch-child-tracker)
@@ -67,13 +71,13 @@ Numeri di riferimento del piano Firebase **Spark** (gratuito, nessuna carta) e V
 | Firestore — scritture | 20.000/giorno | Sampling posizione adattivo (come nel progetto gemello: intervallo lungo da fermi, breve in movimento) — stimando ~100–200 scritture/dispositivo/giorno → 800–1.600/giorno totali per 8 utenti | ampio |
 | Firestore — storage | 1 GiB | Posizioni + recap + anagrafica testuale: trascurabile (KB per record) anche con retention di 12 mesi | ampio |
 | Firestore — rete in uscita | 10 GiB/mese | Trascurabile per soli dati testuali/JSON | ampio |
-| Firebase Storage — spazio | 5 GB | Foto clienti: con compressione a ~300–500 KB/foto, ~10.000–15.000 foto totali prima di avvicinarsi al limite — ampio per una squadra medio-piccola, ma **da monitorare nel tempo** | da rivalutare a lungo termine se il volume foto cresce molto |
-| Firebase Storage — download | 1 GB/giorno | Solo quando si aprono foto/schede cliente: basso in uso normale | ampio, salvo consultazione massiva ripetuta |
+| Firebase Storage — spazio | 5 GB | Copia **display** (compressa, ~300–500 KB) conservata stabilmente: ~10.000–15.000 foto prima di avvicinarsi al limite. Copia **original** (alta risoluzione, ~3–8 MB) presente solo temporaneamente, dall'upload fino a mail inviata + periodo di grazia — non si accumula nel tempo | ampio sulla copia stabile; la copia temporanea richiede solo che il job di pulizia post-invio funzioni |
+| Firebase Storage — download | 1 GB/giorno | Apertura foto/schede cliente (versione display) + invio mail con originali allegati: una giornata con molte foto ad alta risoluzione (es. 20 foto × 5 MB = 100 MB) resta comunque ampiamente sotto soglia | ampio, da ricontrollare solo con volumi molto alti di foto/giorno |
 | Vercel Hobby — funzioni | 100 GB-ore/mese, timeout consigliato ≤30s per funzione | Endpoint leggeri (accetta posizione, genera/invia PDF, gestisci inviti squadra): ben sotto soglia | ampio |
 | Vercel Hobby — banda | 100 GB/mese | Solo chiamate API leggere, PDF generati e inviati via email (non serviti come file statici pesanti) | ampio |
 | GitHub Actions | 2.000 minuti/mese gratuiti (repo privata) / illimitato su repo pubblica | Un cron giornaliero di pulizia dura secondi | ampissimo |
 
-**Conclusione pratica**: lo stesso stack a costo zero del progetto gemello (Firestore Spark + Vercel Hobby + GitHub Actions + osmdroid, niente Cloud Functions/Google Maps che richiederebbero Blaze/fatturazione) regge comodamente una squadra di qualche decina di tecnici senza avvicinarsi ai limiti gratuiti, **a patto di**: comprimere le foto lato client prima dell'upload, mantenere il sampling di posizione adattivo (non un GPS always-on ad alta frequenza), e tenere una guardia di quota giornaliera per dispositivo come già fatto nel progetto gemello (misura di sicurezza contro bug/loop, non perché ci si avvicini davvero al limite). Il collo di bottiglia più probabile a lungo termine è lo storage foto (5 GB), non le operazioni Firestore.
+**Conclusione pratica**: lo stesso stack a costo zero del progetto gemello (Firestore Spark + Vercel Hobby + GitHub Actions + osmdroid, niente Cloud Functions/Google Maps che richiederebbero Blaze/fatturazione) regge comodamente una squadra di qualche decina di tecnici senza avvicinarsi ai limiti gratuiti, **a patto di**: generare sempre la copia compressa per l'uso stabile in app, cancellare l'originale in alta risoluzione dopo l'invio della mail (o dopo il periodo di grazia), mantenere il sampling di posizione adattivo (non un GPS always-on ad alta frequenza), e tenere una guardia di quota giornaliera per dispositivo come già fatto nel progetto gemello (misura di sicurezza contro bug/loop, non perché ci si avvicini davvero al limite). Il collo di bottiglia più probabile a lungo termine resta lo storage foto (5 GB) se il job di pulizia degli originali dovesse fallire silenziosamente — motivo in più per farlo passare dallo stesso meccanismo GitHub Actions già verificato affidabile nel progetto gemello, non da un fire-and-forget lato client.
 
 ## Mockup
 
