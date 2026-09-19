@@ -1,6 +1,6 @@
 # Context — Plumber Diary
 
-Versione: 1.2.0 — 2026-09-19 23:35 UTC (v1.1.0 — 2026-09-19 23:10 UTC, v1.0.0 — 2026-09-19 22:27 UTC: stesure precedenti, vedi changelog.md)
+Versione: 1.3.0 — 2026-09-19 23:55 UTC (v1.2.0 — 2026-09-19 23:35 UTC, v1.1.0 — 2026-09-19 23:10 UTC, v1.0.0 — 2026-09-19 22:27 UTC: stesure precedenti, vedi changelog.md)
 
 ## Obiettivo
 
@@ -34,6 +34,11 @@ Categorie di app esistenti, nessuna copre esattamente il caso d'uso (permanenza 
 10. Anagrafica cliente: possibilità di allegare foto scelte dalla galleria del telefono (non solo fotocamera).
 11. **Multiutente / squadra**: più utenti possono far parte della stessa squadra. Ogni utente vede su una mappa condivisa dove si trovano gli altri membri della squadra durante la giornata. Un'opzione (spenta di default) permette di vedere anche i recap serali già confermati dagli altri membri. **Anagrafica clienti e listino articoli sono condivisi**: un'unica fonte per tutta la squadra, non duplicati per utente.
 12. Le foto (allegate a un intervento/posizione o alla scheda cliente) devono arrivare **in alta risoluzione** nella mail di recap giornaliero inviata all'amministrazione — non nella versione compressa usata per l'archiviazione/sync in app.
+13. **Sede/deposito e pause escluse dal rilevamento cliente**: una posizione marcata come sede/deposito, o una fascia oraria marcata come pausa (es. pranzo), non deve mai essere proposta come "possibile nuovo cliente", anche se la sosta supera la soglia.
+14. **Notifica di conferma cliente in tempo reale**: appena la soglia di permanenza viene superata, l'app può notificare subito "sei da [cliente]?" invece di aspettare solo il recap serale — resta comunque modificabile fino a sera. Attivabile/disattivabile dalle Opzioni.
+15. **Rapportino d'intervento con firma cliente**: generabile dal recap, riepiloga automaticamente orari/note/materiali di un intervento in un documento firmabile su schermo dal cliente in loco. **La firma è sempre saltabile** dall'utente (pulsante "Salta" esplicito): il rapportino può essere generato/inviato anche senza firma.
+16. **Calcolo km percorsi**: distanza stimata fra una sosta e la successiva, mostrata per singola posizione (recap/dettaglio) e aggregata per rimborso carburante/nota spese.
+17. **Dashboard mensile**: ore totali, km percorsi, valore materiali usati e numero interventi, con ripartizione per cliente; accessibile dalle Opzioni, accanto all'export CSV (che ora include anche i km).
 
 ## Decisioni di progetto
 
@@ -49,6 +54,11 @@ Categorie di app esistenti, nessuna copre esattamente il caso d'uso (permanenza 
   - una copia **compressa/ridimensionata** (`.../photos/{photoId}/display.jpg`, ~300–500 KB, lato lungo ~1600px), questa sì conservata stabilmente per la visualizzazione in app (scheda cliente, storico) e per la sincronizzazione fra i membri della squadra (banda/traffico contenuti).
   - L'email di recap allega/incorpora quindi sempre l'originale ad alta risoluzione quando presente; se il totale allegati supera una soglia pratica (i provider email in genere limitano un messaggio a ~20–25 MB), l'invio passa automaticamente da allegati diretti a **link di download sicuro e a scadenza** (URL firmato generato dal backend, valido pochi giorni) elencati nel corpo della mail — mai foto scartate o inviate a risoluzione ridotta senza che l'utente lo sappia.
 - **Multiutente/squadra**: un utente crea una squadra e invita colleghi (link di invito / codice); anagrafica clienti e listino articoli sono collezioni condivise a livello di squadra, non per singolo utente. Le posizioni/i recap restano invece per-utente (ognuno traccia se stesso), ma sono leggibili dagli altri membri della squadra secondo le due opzioni indipendenti: "vedi posizione squadra" (mappa live, pensata per essere per-utente ma di default ragionevole ON) e "vedi recap colleghi" (default **OFF**, dato che è un dato più sensibile — orari e clienti visitati da altri — va attivato consapevolmente).
+- **Sede/pause**: l'utente marca uno o più punti come "sede/deposito" (raggio configurabile, es. 100 m) e una o più fasce orarie ricorrenti come "pausa"; entrambe vengono escluse a monte dall'algoritmo di rilevamento cliente (non generano mai la proposta "nuovo possibile cliente", né la notifica in tempo reale), ma continuano a comparire nella timeline/nel recap come voce informativa ("Sede", "Pausa pranzo").
+- **Notifica di conferma in tempo reale**: worker in background che, al superamento della soglia su una posizione nota, invia subito una notifica locale (non serve andare in rete: il match con lo storico posizioni è già disponibile sul device) con azioni rapide "Sì, confermo" / "Cambia" / "Non ora"; la risposta aggiorna lo stato della sosta corrente, che resta comunque riaperto e correggibile nel recap serale. Per posizioni non note (nessun cliente storico) resta il solo flusso serale, dato che non c'è nulla da confermare finché non si sceglie/crea un'anagrafica.
+- **Rapportino con firma**: generato lato client a partire dai dati già presenti sulla posizione (orari, note, materiali), reso come PDF; la firma è una `Canvas`/`View` di disegno (bitmap vettoriale salvata come immagine, non serve una libreria di firma digitale complessa) allegata al PDF. Il pulsante "Salta" è sempre visibile e non bloccante: il rapportino risultante indica semplicemente "non firmato" invece di interrompere il flusso.
+- **Km percorsi**: calcolati come distanza in linea retta o su rete stradale (valutare in fase di implementazione se usare OSRM pubblico, gratuito, oppure la sola distanza euclidea come stima più semplice e senza dipendenze esterne) tra il punto di fine di una sosta e il punto di inizio della successiva; aggregati per la dashboard mensile e per l'export CSV.
+- **Dashboard mensile**: query aggregata su Firestore per squadra/utente/periodo (ore, km, materiali, interventi, raggruppati per cliente); dato il volume contenuto di record (vedi limiti sotto), calcolabile on-demand lato client senza bisogno di un job di aggregazione lato backend in v1.
 
 ## Architettura backend e riuso da progetto gemello (gwatch-child-tracker)
 
@@ -81,4 +91,4 @@ Numeri di riferimento del piano Firebase **Spark** (gratuito, nessuna carta) e V
 
 ## Mockup
 
-Mockup interattivo delle schermate (Home, Recap serale, Dettaglio posizione, Anagrafica cliente con foto e articoli, Conferma invio mandatino PDF, Squadra — mappa live colleghi, Opzioni, Storico recap): https://claude.ai/artifact/4tyABGusg7BPyEaJKwx92U
+Mockup interattivo delle schermate (Home, Recap serale, Dettaglio posizione, Anagrafica cliente con foto e articoli, Conferma invio mandatino PDF, Squadra — mappa live colleghi, Opzioni, Storico recap, Notifica conferma cliente in tempo reale, Rapportino con firma cliente saltabile, Dashboard mensile): https://claude.ai/artifact/4tyABGusg7BPyEaJKwx92U

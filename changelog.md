@@ -22,3 +22,12 @@
 - Decisione tecnica: se il totale degli allegati in alta risoluzione supera la soglia pratica di un provider email (~20–25 MB), l'invio passa da allegati diretti a link di download sicuro e a scadenza, mai a foto scartate o inviate a risoluzione ridotta senza avviso.
 - Aggiunta al mockup la sezione "Foto intervento" nella schermata Dettaglio posizione (prima le foto erano previste solo sulla scheda cliente) e un'indicazione delle foto allegate nella card del Recap serale.
 - Rivista la tabella dei limiti del piano gratuito: lo storage Firebase Storage resta ampio sulla copia compressa stabile; la copia originale in alta risoluzione non si accumula nel tempo perché temporanea, a patto che il job di pulizia post-invio funzioni.
+
+## 1.3.0 — 2026-09-19 23:55 UTC
+Aggiunte 5 funzioni proposte e approvate dall'utente (una — il rapportino con firma — con richiesta esplicita di renderla sempre saltabile):
+- **Sede/deposito e pause escluse dal rilevamento cliente**: una posizione marcata come sede o una fascia oraria marcata come pausa non genera mai la proposta "nuovo possibile cliente", né la notifica in tempo reale. Nuova sezione "Sede e pause" nelle Opzioni.
+- **Notifica di conferma cliente in tempo reale**: appena la soglia di permanenza è superata su una posizione nota, notifica locale immediata "sei da [cliente]?" con azioni rapide, invece di aspettare solo il recap serale. Nuovo mockup *Notifica*, nuovo toggle nelle Opzioni.
+- **Rapportino d'intervento con firma cliente, sempre saltabile**: PDF generato dal recap con orari/note/materiali dell'intervento, firmabile su schermo dal cliente; pulsante "Salta" sempre disponibile ed esplicito, il rapportino può essere inviato anche senza firma. Nuovo mockup *Rapportino*.
+- **Calcolo km percorsi**: distanza stimata tra una sosta e la successiva, mostrata su Recap/Dettaglio posizione e aggregata per rimborso carburante/nota spese.
+- **Dashboard mensile**: ore totali, km, valore materiali e interventi per cliente/periodo, accessibile dalle Opzioni. Nuovo mockup *Dashboard*. Export CSV esteso per includere anche i km.
+- Non implementata (rifiutata dall'utente): chat di squadra.
