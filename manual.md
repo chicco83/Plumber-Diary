@@ -1,6 +1,10 @@
 # Manuale funzionale — Plumber Diary
 
-Versione: 1.3.0 — 2026-09-19 23:55 UTC (v1.2.0 — 2026-09-19 23:35 UTC, v1.1.0 — 2026-09-19 23:10 UTC, v1.0.0 — 2026-09-19 22:27 UTC: stesure precedenti, vedi changelog.md)
+Versione: 1.4.0 — 2026-09-20 00:10 UTC (v1.3.0 — 2026-09-19 23:55 UTC, v1.2.0 — 2026-09-19 23:35 UTC, v1.1.0 — 2026-09-19 23:10 UTC, v1.0.0 — 2026-09-19 22:27 UTC: stesure precedenti, vedi changelog.md)
+
+> Nota: questo manuale descrive il comportamento previsto dell'app a
+> progetto completo. Lo stato di avanzamento reale dell'implementazione è
+> tracciato in `context.md`, sezione "Stato implementazione".
 
 ## Cos'è
 

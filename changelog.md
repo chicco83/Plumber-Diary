@@ -31,3 +31,10 @@ Aggiunte 5 funzioni proposte e approvate dall'utente (una — il rapportino con 
 - **Calcolo km percorsi**: distanza stimata tra una sosta e la successiva, mostrata su Recap/Dettaglio posizione e aggregata per rimborso carburante/nota spese.
 - **Dashboard mensile**: ore totali, km, valore materiali e interventi per cliente/periodo, accessibile dalle Opzioni. Nuovo mockup *Dashboard*. Export CSV esteso per includere anche i km.
 - Non implementata (rifiutata dall'utente): chat di squadra.
+
+## 1.4.0 — 2026-09-20 00:10 UTC
+Prima stesura dell'architettura tecnica e dello scaffolding di codice (finora solo progetto/mockup).
+- Creato lo scaffolding Android (Kotlin/Jetpack Compose) in `app/`: modelli dati, percorsi Firestore, repository, clustering soste, riconoscimento cliente, esclusione sede/pause, foreground service di tracciamento con sampling adattivo, notifica di conferma in tempo reale, foto a doppia risoluzione, generatori PDF (mandatino e rapportino), calcolo km, navigazione Compose con una route per schermata del mockup.
+- Creato il backend Vercel Functions in `backend/`: endpoint `create-team`, `create-invite`, `accept-invite` (unico punto di iscrizione a una squadra, mai una scrittura diretta del client), `send-recap-email` (foto in alta risoluzione con fallback a link firmati, requisito 12), `send-mandatino`, `cleanup` (retention posizioni, foto originali scadute, inviti, quote); Firestore Security Rules e indici; workflow GitHub Actions per il cron di pulizia giornaliera.
+- Aggiunta la sezione "Stato implementazione" a `context.md`: scaffolding scritto ma non compilato/deployato (mancano un vero progetto Firebase, `google-services.json`, icone launcher, variabili d'ambiente Vercel — stesso limite incontrato all'avvio del progetto gemello gwatch-child-tracker).
+- Aggiunti `.gitignore`, `README.md` di root/app/backend con i passaggi manuali richiesti prima del primo build/deploy.

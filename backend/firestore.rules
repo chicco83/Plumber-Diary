@@ -1,0 +1,77 @@
+// firestore.rules — v1.0.0 — 2026-09-20 00:10 UTC
+//
+// Regole di sicurezza per lo schema descritto in
+// app/src/main/java/com/plumberdiary/app/data/FirestorePaths.kt.
+//
+// Principio cardine (vedi context.md, "Architettura backend"): l'appartenenza
+// a una squadra (teams/{teamId}/members/{uid}) NON è mai creabile dal client.
+// Se lo fosse, chiunque avesse un account Google potrebbe scrivere il proprio
+// uid sotto una squadra a piacere e vedere posizioni/clienti altrui — stessa
+// vulnerabilità già identificata e corretta nel progetto gemello
+// gwatch-child-tracker per parents/{uid}. L'iscrizione avviene SOLO tramite
+// l'endpoint backend/api/accept-invite.js (Admin SDK, bypassa queste regole).
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isTeamMember(teamId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid));
+    }
+
+    match /teams/{teamId} {
+      allow read: if isTeamMember(teamId);
+      allow create, update, delete: if false; // gestito da endpoint backend
+
+      match /members/{memberUid} {
+        // Ogni membro vede l'elenco squadra (mappa live, requisito 11).
+        allow read: if isTeamMember(teamId);
+        // Creazione SEMPRE vietata dal client: vedi commento in cima al file.
+        allow create, delete: if false;
+        // Un membro aggiorna SOLO il proprio documento (es. liveLocation),
+        // mai quello di un collega.
+        allow update: if isTeamMember(teamId) && request.auth.uid == memberUid;
+
+        match /settings/preferences {
+          allow read, write: if isSignedIn() && request.auth.uid == memberUid;
+        }
+
+        match /stops/{stopId} {
+          // Le proprie soste: lettura/scrittura solo al proprietario.
+          // "Vedi recap dei colleghi" (requisito 11, default OFF) è
+          // un'opzione di CHI GUARDA e va applicata lato client filtrando
+          // cosa mostrare — qui si concede comunque la lettura ai membri
+          // della squadra, perché la privacy del dato sensibile è nel non
+          // mostrarlo in UI di default, non nel negarne l'accesso a chi ha
+          // esplicitamente scelto di consultarlo (scelta reversibile: se in
+          // futuro serve un controllo lato server più stretto, si aggiunge
+          // qui un campo "sharedWithTeam" sulla sosta).
+          allow read: if isTeamMember(teamId);
+          allow write: if isTeamMember(teamId) && request.auth.uid == memberUid;
+        }
+      }
+
+      // Anagrafica clienti e listino articoli: CONDIVISI (requisito 11),
+      // qualunque membro può leggere e scrivere.
+      match /clients/{clientId} {
+        allow read, write: if isTeamMember(teamId);
+      }
+
+      match /articles/{articleId} {
+        allow read, write: if isTeamMember(teamId);
+      }
+
+      // Inviti: mai leggibili/scrivibili dal client. Solo l'Admin SDK
+      // dell'endpoint backend li crea/consuma.
+      match /invites/{inviteCode} {
+        allow read, write: if false;
+      }
+    }
+  }
+}

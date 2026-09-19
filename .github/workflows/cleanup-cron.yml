@@ -1,0 +1,23 @@
+# cleanup-cron.yml — v1.0.0 — 2026-09-20 00:10 UTC
+#
+# Chiama backend/api/cleanup.js una volta al giorno. Gratuito su GitHub
+# Actions (repo pubblica: minuti illimitati), scelto al posto dei Cron Job
+# nativi Vercel perché sul piano Hobby bloccavano il deploy — stessa
+# soluzione già adottata nel progetto gemello gwatch-child-tracker.
+
+name: Cleanup giornaliero
+
+on:
+  schedule:
+    - cron: "0 2 * * *" # 02:00 UTC ogni giorno
+  workflow_dispatch: {} # avviabile anche a mano dalla tab Actions
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chiama /api/cleanup
+        run: |
+          curl -sS -X POST "${{ secrets.BACKEND_URL }}/api/cleanup" \
+            -H "x-cleanup-token: ${{ secrets.CLEANUP_TOKEN }}" \
+            --fail

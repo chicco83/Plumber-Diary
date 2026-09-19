@@ -1,6 +1,6 @@
 # Context — Plumber Diary
 
-Versione: 1.3.0 — 2026-09-19 23:55 UTC (v1.2.0 — 2026-09-19 23:35 UTC, v1.1.0 — 2026-09-19 23:10 UTC, v1.0.0 — 2026-09-19 22:27 UTC: stesure precedenti, vedi changelog.md)
+Versione: 1.4.0 — 2026-09-20 00:10 UTC (v1.3.0 — 2026-09-19 23:55 UTC, v1.2.0 — 2026-09-19 23:35 UTC, v1.1.0 — 2026-09-19 23:10 UTC, v1.0.0 — 2026-09-19 22:27 UTC: stesure precedenti, vedi changelog.md)
 
 ## Obiettivo
 
@@ -88,6 +88,35 @@ Numeri di riferimento del piano Firebase **Spark** (gratuito, nessuna carta) e V
 | GitHub Actions | 2.000 minuti/mese gratuiti (repo privata) / illimitato su repo pubblica | Un cron giornaliero di pulizia dura secondi | ampissimo |
 
 **Conclusione pratica**: lo stesso stack a costo zero del progetto gemello (Firestore Spark + Vercel Hobby + GitHub Actions + osmdroid, niente Cloud Functions/Google Maps che richiederebbero Blaze/fatturazione) regge comodamente una squadra di qualche decina di tecnici senza avvicinarsi ai limiti gratuiti, **a patto di**: generare sempre la copia compressa per l'uso stabile in app, cancellare l'originale in alta risoluzione dopo l'invio della mail (o dopo il periodo di grazia), mantenere il sampling di posizione adattivo (non un GPS always-on ad alta frequenza), e tenere una guardia di quota giornaliera per dispositivo come già fatto nel progetto gemello (misura di sicurezza contro bug/loop, non perché ci si avvicini davvero al limite). Il collo di bottiglia più probabile a lungo termine resta lo storage foto (5 GB) se il job di pulizia degli originali dovesse fallire silenziosamente — motivo in più per farlo passare dallo stesso meccanismo GitHub Actions già verificato affidabile nel progetto gemello, non da un fire-and-forget lato client.
+
+## Stato implementazione (aggiornato al 2026-09-20)
+
+- **`app/`**: scaffolding Kotlin/Jetpack Compose creato. Implementati con
+  logica reale: modelli dati (`data/model/`), percorsi Firestore
+  (`data/FirestorePaths.kt`), repository (`data/repository/`), clustering
+  soste e riconoscimento cliente (`location/StopClusterer.kt`,
+  `location/ClientMatcher.kt`), esclusione sede/pause
+  (`location/DepotAndBreakFilter.kt`), foreground service di tracciamento
+  con sampling adattivo (`location/LocationTrackingService.kt`), notifica di
+  conferma in tempo reale (`notification/RealtimeConfirmNotifier.kt`), foto
+  a doppia risoluzione (`photo/PhotoUploader.kt`), generatori PDF mandatino
+  e rapportino (`pdf/`), calcolo km (`recap/DailyDistanceCalculator.kt`).
+  Navigazione Compose con una route per schermata del mockup: i layout
+  dettagliati sono ancora placeholder (`TODO` con riferimento al file
+  `.dc.html` corrispondente). **Non compilato/testato**: mancano
+  `google-services.json` di un vero progetto Firebase e le icone launcher
+  (vedi `app/README.md` per i passaggi manuali richiesti — stesso limite
+  incontrato all'avvio del progetto gemello gwatch-child-tracker, nessun SDK
+  Android disponibile in questo ambiente).
+- **`backend/`**: endpoint Vercel Functions scritti (`create-team`,
+  `create-invite`, `accept-invite`, `send-recap-email`, `send-mandatino`,
+  `cleanup`), Firestore rules e indici, workflow GitHub Actions per il cron
+  di pulizia. **Non deployato**: richiede un vero progetto Firebase e le
+  variabili d'ambiente elencate in `backend/README.md`.
+- Non ancora iniziati: login Google e flusso di creazione/iscrizione
+  squadra lato UI, ViewModel che colleghino le schermate ai repository, UI
+  dettagliata pixel-per-pixel rispetto al mockup, integrazione reale Google
+  Calendar (dipendenza dichiarata, wiring OAuth non scritto).
 
 ## Mockup
 

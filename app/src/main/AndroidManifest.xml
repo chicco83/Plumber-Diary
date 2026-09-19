@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AndroidManifest.xml — v1.0.0 — 2026-09-20 00:10 UTC -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Posizione: foreground prima, background richiesto come step separato
+         (dialogo esplicito lato UI, mai chiesto insieme al permesso foreground:
+         Android rifiuta la richiesta combinata su API 30+). -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Nessun permesso di storage per le foto: si usa il Photo Picker di sistema
+         (ActivityResultContracts.PickMultipleVisualMedia), che non lo richiede. -->
+
+    <application
+        android:name=".PlumberDiaryApp"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.PlumberDiary"
+        android:usesCleartextTraffic="false">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.PlumberDiary">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Foreground service di tracciamento: sampling adattivo, cluster delle
+             soste, verifica soglia/sede/pause, notifica di conferma in tempo reale. -->
+        <service
+            android:name=".location.LocationTrackingService"
+            android:foregroundServiceType="location"
+            android:exported="false" />
+
+        <service
+            android:name=".notification.PlumberFcmService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name=".location.BootRestartReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+</manifest>

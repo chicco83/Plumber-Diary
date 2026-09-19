@@ -1,0 +1,11 @@
+{
+  "name": "plumber-diary-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vercel Functions per Plumber Diary — v1.0.0 — 2026-09-20 00:10 UTC. Stesso pattern del progetto gemello chicco83/gwatch-child-tracker: Firestore Spark + Vercel Hobby, niente Cloud Functions (richiederebbero il piano Blaze).",
+  "dependencies": {
+    "firebase-admin": "^12.5.0",
+    "nodemailer": "^6.9.15",
+    "pdf-lib": "^1.17.1"
+  }
+}

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- themes.xml — v1.0.0 — 2026-09-20 00:10 UTC -->
+<resources>
+    <style name="Theme.PlumberDiary" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:statusBarColor">#0F766E</item>
+    </style>
+</resources>
