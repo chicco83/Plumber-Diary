@@ -1,6 +1,6 @@
 # Context — Plumber Diary
 
-Versione: 1.0.0 — 2026-09-19 22:27 UTC
+Versione: 1.1.0 — 2026-09-19 23:10 UTC (v1.0.0 — 2026-09-19 22:27 UTC: prima stesura, vedi changelog.md)
 
 ## Obiettivo
 
@@ -31,6 +31,8 @@ Categorie di app esistenti, nessuna copre esattamente il caso d'uso (permanenza 
 7. Integrazione con Google Calendar: dal recap serale si può creare un promemoria (es. preventivo, ritorno) agganciato alla posizione/cliente.
 8. Anagrafica cliente: dati anagrafici + listino articoli associabile (codice, descrizione, prezzo unitario, quantità) per registrare i materiali usati in un intervento.
 9. Anagrafica cliente: campo email dedicato per l'invio del **"mandatino delle ore"** — un PDF con riepilogo ore e materiali dell'intervento/periodo, inviato solo dopo conferma esplicita dell'utente (mai automatico).
+10. Anagrafica cliente: possibilità di allegare foto scelte dalla galleria del telefono (non solo fotocamera).
+11. **Multiutente / squadra**: più utenti possono far parte della stessa squadra. Ogni utente vede su una mappa condivisa dove si trovano gli altri membri della squadra durante la giornata. Un'opzione (spenta di default) permette di vedere anche i recap serali già confermati dagli altri membri. **Anagrafica clienti e listino articoli sono condivisi**: un'unica fonte per tutta la squadra, non duplicati per utente.
 
 ## Decisioni di progetto
 
@@ -41,7 +43,38 @@ Categorie di app esistenti, nessuna copre esattamente il caso d'uso (permanenza 
 - **Invio email recap**: job schedulato che genera il riepilogo testuale/PDF e lo invia all'indirizzo amministrazione impostato nelle opzioni (default ON).
 - **Mandatino ore PDF**: generato on-demand dalla scheda cliente, sempre con step di conferma esplicito (dialog con riepilogo periodo/ore/materiali/destinatario) prima dell'invio.
 - **Privacy**: retention storico posizioni configurabile (default 12 mesi), permessi Android per posizione in background richiesti in modo esplicito e progressivo (foreground prima, poi background con spiegazione).
+- **Foto cliente**: selezione da galleria tramite `ActivityResultContracts.PickMultipleVisualMedia` (Photo Picker di sistema — non richiede il permesso `READ_MEDIA_IMAGES` su Android 13+), immagini compresse/ridimensionate lato client prima dell'upload (vedi limiti storage sotto).
+- **Multiutente/squadra**: un utente crea una squadra e invita colleghi (link di invito / codice); anagrafica clienti e listino articoli sono collezioni condivise a livello di squadra, non per singolo utente. Le posizioni/i recap restano invece per-utente (ognuno traccia se stesso), ma sono leggibili dagli altri membri della squadra secondo le due opzioni indipendenti: "vedi posizione squadra" (mappa live, pensata per essere per-utente ma di default ragionevole ON) e "vedi recap colleghi" (default **OFF**, dato che è un dato più sensibile — orari e clienti visitati da altri — va attivato consapevolmente).
+
+## Architettura backend e riuso da progetto gemello (gwatch-child-tracker)
+
+Abbiamo già sviluppato e verificato in produzione un'app Android con Firebase + geolocalizzazione (repo `chicco83/gwatch-child-tracker`, tracciamento di un dispositivo Wear OS per un genitore). Riusiamo lo stesso stack e le stesse lezioni imparate, invece di ripartire da zero:
+
+- **Firestore (piano Spark, gratuito)** come datastore condiviso: documenti per squadra (`teams/{teamId}`), membri, posizioni/soste, recap, clienti, articoli. Multi-utente già validato nel progetto gemello (regole basate su `parents/{uid}` → qui analogo con `teams/{teamId}/members/{uid}`), incluso il vincolo di sicurezza importante: la creazione dell'appartenenza a una squadra **non deve essere auto-approvabile dal client** (altrimenti chiunque abbia un account Google potrebbe autoinvitarsi) — l'accettazione di un invito va validata da un endpoint backend, non da una scrittura diretta Firestore.
+- **Vercel Functions (piano Hobby, gratuito)** al posto delle Cloud Functions Firebase: le Cloud Functions richiedono il piano Blaze (pay-as-you-go, carta di credito), vincolo Google non aggirabile restando su Firebase Functions. Stesso codice Node.js/`firebase-admin`, cambia solo il "contenitore" di esecuzione. Verificato che i Cron Job nativi di Vercel bloccano il deploy sul piano Hobby: la pulizia programmata (retention storico, quote) va fatta con un **workflow GitHub Actions** schedulato che chiama un endpoint `/api/cleanup`, non con `vercel.json` → `crons`.
+- **Mappa: OpenStreetMap via osmdroid**, non Google Maps SDK — Google Maps Platform richiede fatturazione **attiva ad ogni chiamata** (non basta crearla una volta), incompatibile con l'obiettivo "mai una carta collegata in modo permanente". osmdroid non richiede chiave API né fatturazione; la ricerca indirizzi usa Nominatim (OpenStreetMap), anch'esso gratuito senza chiave.
+- **Notifiche push**: FCM. Per contenuti che devono attivare comportamenti anche ad app in background/uccisa (es. sveglia con nuovo recap disponibile, o promemoria squadra) usare messaggi **data-only**, non `notification`-only — lezione dal progetto gemello: un payload `notification`+`data` viene scartato dai gestori custom se non gestito esplicitamente prima del controllo su `message.notification`.
+- **Auth**: Firebase Authentication con provider Google, in comune fra i membri della squadra.
+- **Foto cliente**: **Firebase Storage** (piano gratuito, non richiede Blaze), path `teams/{teamId}/clients/{clientId}/photos/{photoId}.jpg`; upload solo di immagini già ridimensionate/compresse lato client per restare ampiamente sotto i limiti gratuiti (vedi sotto).
+
+### Limiti del piano gratuito e margini per un piccolo team
+
+Numeri di riferimento del piano Firebase **Spark** (gratuito, nessuna carta) e Vercel **Hobby** (gratuito), verificati come vincoli reali nel progetto gemello:
+
+| Risorsa | Limite piano gratuito | Stima d'uso Plumber Diary (squadra di 6–8 tecnici) | Margine |
+|---|---|---|---|
+| Firestore — letture | 50.000/giorno | Mappa squadra via listener realtime (non conta come lettura ripetuta per ogni frame, solo su cambiamento) + apertura recap/clienti: stima poche migliaia/giorno anche con uso intenso | ampio |
+| Firestore — scritture | 20.000/giorno | Sampling posizione adattivo (come nel progetto gemello: intervallo lungo da fermi, breve in movimento) — stimando ~100–200 scritture/dispositivo/giorno → 800–1.600/giorno totali per 8 utenti | ampio |
+| Firestore — storage | 1 GiB | Posizioni + recap + anagrafica testuale: trascurabile (KB per record) anche con retention di 12 mesi | ampio |
+| Firestore — rete in uscita | 10 GiB/mese | Trascurabile per soli dati testuali/JSON | ampio |
+| Firebase Storage — spazio | 5 GB | Foto clienti: con compressione a ~300–500 KB/foto, ~10.000–15.000 foto totali prima di avvicinarsi al limite — ampio per una squadra medio-piccola, ma **da monitorare nel tempo** | da rivalutare a lungo termine se il volume foto cresce molto |
+| Firebase Storage — download | 1 GB/giorno | Solo quando si aprono foto/schede cliente: basso in uso normale | ampio, salvo consultazione massiva ripetuta |
+| Vercel Hobby — funzioni | 100 GB-ore/mese, timeout consigliato ≤30s per funzione | Endpoint leggeri (accetta posizione, genera/invia PDF, gestisci inviti squadra): ben sotto soglia | ampio |
+| Vercel Hobby — banda | 100 GB/mese | Solo chiamate API leggere, PDF generati e inviati via email (non serviti come file statici pesanti) | ampio |
+| GitHub Actions | 2.000 minuti/mese gratuiti (repo privata) / illimitato su repo pubblica | Un cron giornaliero di pulizia dura secondi | ampissimo |
+
+**Conclusione pratica**: lo stesso stack a costo zero del progetto gemello (Firestore Spark + Vercel Hobby + GitHub Actions + osmdroid, niente Cloud Functions/Google Maps che richiederebbero Blaze/fatturazione) regge comodamente una squadra di qualche decina di tecnici senza avvicinarsi ai limiti gratuiti, **a patto di**: comprimere le foto lato client prima dell'upload, mantenere il sampling di posizione adattivo (non un GPS always-on ad alta frequenza), e tenere una guardia di quota giornaliera per dispositivo come già fatto nel progetto gemello (misura di sicurezza contro bug/loop, non perché ci si avvicini davvero al limite). Il collo di bottiglia più probabile a lungo termine è lo storage foto (5 GB), non le operazioni Firestore.
 
 ## Mockup
 
-Mockup interattivo delle schermate (Home, Recap serale, Dettaglio posizione, Anagrafica cliente + articoli, Conferma invio mandatino PDF, Opzioni, Storico recap): https://claude.ai/artifact/4tyABGusg7BPyEaJKwx92U
+Mockup interattivo delle schermate (Home, Recap serale, Dettaglio posizione, Anagrafica cliente con foto e articoli, Conferma invio mandatino PDF, Squadra — mappa live colleghi, Opzioni, Storico recap): https://claude.ai/artifact/4tyABGusg7BPyEaJKwx92U
