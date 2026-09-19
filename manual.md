@@ -1,6 +1,6 @@
 # Manuale funzionale — Plumber Diary
 
-Versione: 1.4.0 — 2026-09-20 00:10 UTC (v1.3.0 — 2026-09-19 23:55 UTC, v1.2.0 — 2026-09-19 23:35 UTC, v1.1.0 — 2026-09-19 23:10 UTC, v1.0.0 — 2026-09-19 22:27 UTC: stesure precedenti, vedi changelog.md)
+Versione: 1.5.0 — 2026-09-20 00:30 UTC (v1.4.0 — 2026-09-20 00:10 UTC e precedenti, vedi changelog.md)
 
 > Nota: questo manuale descrive il comportamento previsto dell'app a
 > progetto completo. Lo stato di avanzamento reale dell'implementazione è
@@ -8,7 +8,7 @@ Versione: 1.4.0 — 2026-09-20 00:10 UTC (v1.3.0 — 2026-09-19 23:55 UTC, v1.2.
 
 ## Cos'è
 
-Plumber Diary è un'app Android che traccia automaticamente dove sei stato durante la giornata di lavoro, calcola quanto tempo sei rimasto in ogni posizione, e la sera ti propone un riepilogo da confermare e correggere, associando ogni sosta a un cliente.
+Plumber Diary è un'app Android che traccia automaticamente dove sei stato durante la giornata di lavoro, calcola quanto tempo sei rimasto in ogni posizione, e la sera ti propone un riepilogo da confermare e correggere, associando ogni sosta a un cliente. L'accesso avviene con il proprio account Google; al primo accesso si crea una nuova squadra o ci si unisce a una esistente con un codice di invito.
 
 ## Flusso d'uso
 

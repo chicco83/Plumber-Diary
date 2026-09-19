@@ -1,6 +1,6 @@
 # Context — Plumber Diary
 
-Versione: 1.4.0 — 2026-09-20 00:10 UTC (v1.3.0 — 2026-09-19 23:55 UTC, v1.2.0 — 2026-09-19 23:35 UTC, v1.1.0 — 2026-09-19 23:10 UTC, v1.0.0 — 2026-09-19 22:27 UTC: stesure precedenti, vedi changelog.md)
+Versione: 1.5.0 — 2026-09-20 00:30 UTC (v1.4.0 — 2026-09-20 00:10 UTC e precedenti, vedi changelog.md)
 
 ## Obiettivo
 
@@ -113,10 +113,20 @@ Numeri di riferimento del piano Firebase **Spark** (gratuito, nessuna carta) e V
   `cleanup`), Firestore rules e indici, workflow GitHub Actions per il cron
   di pulizia. **Non deployato**: richiede un vero progetto Firebase e le
   variabili d'ambiente elencate in `backend/README.md`.
-- Non ancora iniziati: login Google e flusso di creazione/iscrizione
-  squadra lato UI, ViewModel che colleghino le schermate ai repository, UI
-  dettagliata pixel-per-pixel rispetto al mockup, integrazione reale Google
-  Calendar (dipendenza dichiarata, wiring OAuth non scritto).
+- **Login Google e selezione/creazione squadra**: scritti
+  (`auth/AuthRepository.kt`, `ui/auth/LoginScreen.kt`,
+  `ui/auth/TeamSelectionScreen.kt`, `session/SessionStore.kt`,
+  `data/BackendClient.kt`); `PlumberDiaryNavHost` apre su Login → (se
+  nessuna squadra salvata) Selezione/Creazione squadra → Home.
+  **In attesa del progetto Firebase reale** per essere testati: l'utente ha
+  scelto di fornire una chiave service account (generata dalla Console
+  Firebase) per farmi creare/configurare il progetto via API — stesso
+  procedimento già usato nel progetto gemello — invece di fare i passaggi a
+  mano in Console. Fino a quel momento restano scritti ma non verificabili.
+- Non ancora iniziati: ViewModel che colleghino le altre schermate ai
+  repository, UI dettagliata pixel-per-pixel rispetto al mockup,
+  integrazione reale Google Calendar (dipendenza dichiarata, wiring OAuth
+  non scritto).
 
 ## Mockup
 

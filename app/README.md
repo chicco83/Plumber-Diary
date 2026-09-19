@@ -24,6 +24,20 @@ Firebase, esattamente come nel progetto gemello `chicco83/gwatch-child-tracker`
 5. Vedi `backend/README.md` per il setup delle Vercel Functions/GitHub
    Actions necessarie a email di recap, mandatino PDF e pulizia storico.
 
+## Login Google (in attesa del progetto Firebase reale)
+
+Il codice di login è scritto e pronto (`auth/AuthRepository.kt`,
+`ui/auth/LoginScreen.kt`, `ui/auth/TeamSelectionScreen.kt`,
+`session/SessionStore.kt`, `data/BackendClient.kt`): NavHost apre su
+Login → (se nessuna squadra salvata) Selezione/Creazione squadra → Home.
+Non è ancora testabile perché manca un vero progetto Firebase — vedi
+`context.md`, "Stato implementazione", per cosa serve dall'utente prima di
+poterlo compilare e chi ha fornito cosa in questa fase.
+
+Una volta disponibile `google-services.json`, aggiornare anche
+`BACKEND_BASE_URL` in `ui/PlumberDiaryNavHost.kt` con l'URL reale del
+deploy Vercel (oggi è un placeholder).
+
 ## Cosa è già implementato in questo scaffolding
 
 - **Modelli dati** (`data/model/`): `Stop`, `ClientRecord`, `Article`,
@@ -50,8 +64,6 @@ Firebase, esattamente come nel progetto gemello `chicco83/gwatch-child-tracker`
 
 ## Cosa manca (prossimi passi, non ancora iniziati)
 
-- Login Google (Firebase Auth) e flusso di creazione/iscrizione a una
-  squadra (`accept-invite`, vedi `backend/`).
 - ViewModel che colleghino le schermate `TODO` ai repository (oggi i
   repository esistono e sono pronti all'uso, ma le Composable non li
   chiamano ancora).

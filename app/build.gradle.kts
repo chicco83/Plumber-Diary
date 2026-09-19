@@ -86,6 +86,12 @@ dependencies {
     // --- Lavoro in background persistente (sampling posizione, upload foto/PDF) ---
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 
+    // --- Chiamate al backend Vercel (create-team, create-invite, accept-invite, ecc.) ---
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // --- Persistenza della sessione (uid/teamId) tra riavvii dell'app ---
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
+
     // --- Generazione PDF (mandatino ore, rapportino) ---
     implementation("com.itextpdf:itext7-core:8.0.5")
 
