@@ -13,6 +13,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.auth.FirebaseAuth
+import com.plumberdiary.app.data.BackendConfig
 import com.plumberdiary.app.session.SessionStore
 import com.plumberdiary.app.ui.auth.LoginScreen
 import com.plumberdiary.app.ui.auth.TeamSelectionScreen
@@ -73,13 +74,10 @@ object Routes {
     fun rapportino(stopId: String) = "rapportino/$stopId"
 }
 
-/**
- * URL del deploy Vercel del backend (vedi backend/README.md). Centralizzato
- * qui in attesa di uno strato di configurazione vero e proprio (BuildConfig
- * per ambiente dev/prod) — TODO una volta che il progetto Firebase/Vercel
- * reale esiste.
- */
-private const val BACKEND_BASE_URL = "https://plumber-diary.vercel.app"
+// v1.6.0 — 2026-09-24: l'URL del deploy Vercel vive ora in
+// com.plumberdiary.app.data.BackendConfig (prima era duplicato anche nelle
+// schermate Recap/Cliente/Squadra/Opzioni): un unico punto da aggiornare,
+// vedi SETUP.md passo 4.
 
 @Composable
 fun PlumberDiaryNavHost(
@@ -116,7 +114,7 @@ fun PlumberDiaryNavHost(
         }
         composable(Routes.TEAM_SELECTION) {
             TeamSelectionScreen(
-                backendBaseUrl = BACKEND_BASE_URL,
+                backendBaseUrl = BackendConfig.BASE_URL,
                 onTeamReady = { navController.navigate(Routes.HOME) { popUpTo(Routes.TEAM_SELECTION) { inclusive = true } } },
             )
         }

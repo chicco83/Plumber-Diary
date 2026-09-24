@@ -1,0 +1,51 @@
+// storage.rules — v1.6.0 — 2026-09-24
+//
+// Regole di sicurezza per Firebase Storage (foto, requisito 12). Mancavano
+// nello scaffolding: senza di esse il bucket resta in modalità "test" e le
+// foto non sono accessibili una volta attivato il progetto. Stesso modello
+// di autorizzazione di firestore.rules: la membership alla squadra è il
+// criterio (verificata con riferimento incrociato al documento Firestore,
+// supportato dalle Storage Rules). L'Admin SDK del backend Vercel (invio
+// mail recap, cleanup) bypassa queste regole per design.
+//
+// Percorsi (vedi app/.../data/FirestorePaths.kt):
+//   teams/{teamId}/clients/{clientId}/photos/{photoId}/display.jpg
+//   teams/{teamId}/members/{uid}/stops/{stopId}/photos/{photoId}/original.jpg
+//   teams/{teamId}/members/{uid}/stops/{stopId}/photos/{photoId}/display.jpg
+
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isTeamMember(teamId) {
+      return isSignedIn() &&
+        exists(/databases/(default)/documents/teams/$(teamId)/members/$(request.auth.uid));
+    }
+
+    // Foto della scheda cliente (condivise, requisito 10/11): ogni membro
+    // legge e carica; le miniature "display" sono l'unica copia conservata.
+    match /teams/{teamId}/clients/{clientId}/photos/{photoId}/{allPaths=**} {
+      allow read: if isTeamMember(teamId);
+      allow write: if isTeamMember(teamId);
+    }
+
+    // Foto degli interventi (requisito 12): scrive SOLO il proprietario della
+    // sosta (original + display), leggono tutti i membri (la display serve
+    // alla sync di squadra). L'original HD è letto solo dall'Admin SDK per la
+    // mail di recap e cancellato dopo l'invio (backend/api/cleanup.js).
+    match /teams/{teamId}/members/{uid}/stops/{stopId}/photos/{photoId}/{allPaths=**} {
+      allow read: if isTeamMember(teamId);
+      allow write: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Tutto il resto del bucket è chiuso.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

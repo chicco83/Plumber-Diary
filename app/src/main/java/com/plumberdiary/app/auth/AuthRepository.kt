@@ -25,9 +25,25 @@ class AuthRepository(
     private val context: Context,
     private val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance(),
 ) {
+    // v1.6.0 — 2026-09-23: il default_web_client_id è generato dal plugin
+    // google-services SOLO se app/google-services.json è presente (vedi
+    // SETUP.md). Si risolve a runtime con getIdentifier invece di un
+    // riferimento R.string compile-time, così il codice compila anche senza la
+    // configurazione Firebase e dà un errore chiaro al primo login se manca.
+    private val webClientId: String by lazy {
+        val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+        if (resId == 0) {
+            error(
+                "Manca app/google-services.json: crea il progetto Firebase e scarica il file " +
+                    "(vedi SETUP.md, sezione Firebase). Il login Google non può funzionare senza."
+            )
+        }
+        context.getString(resId)
+    }
+
     private val googleSignInClient: GoogleSignInClient by lazy {
         val options = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(context.getString(R.string.default_web_client_id))
+            .requestIdToken(webClientId)
             .requestEmail()
             .build()
         GoogleSignIn.getClient(context, options)

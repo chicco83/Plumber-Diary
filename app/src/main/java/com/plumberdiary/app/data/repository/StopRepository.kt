@@ -33,6 +33,12 @@ class StopRepository(
         return snapshot.documents.firstOrNull()?.toObject<Stop>()
     }
 
+    /** v1.6.0 — 2026-09-23: lettura di una singola sosta (schermate Dettaglio/Rapportino). */
+    suspend fun getStop(teamId: String, uid: String, stopId: String): Stop? {
+        val doc = firestore.document(FirestorePaths.stop(teamId, uid, stopId)).get().await()
+        return doc.toObject<Stop>()
+    }
+
     suspend fun getStopsForDay(teamId: String, uid: String, dayStartMillis: Long, dayEndMillis: Long): List<Stop> {
         val snapshot = firestore.collection(FirestorePaths.stops(teamId, uid))
             .whereGreaterThanOrEqualTo("startedAt", dayStartMillis)

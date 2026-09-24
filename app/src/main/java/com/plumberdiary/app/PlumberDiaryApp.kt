@@ -9,6 +9,8 @@ import com.plumberdiary.app.session.SessionStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.osmdroid.config.Configuration
+import org.osmdroid.config.OsmdroidConfigurationFactory
 
 // Versione precedente (v1.0.0 — 2026-09-20 00:10 UTC), sostituita il 2026-09-20
 // perché il ripristino della sessione era solo un TODO:
@@ -27,6 +29,14 @@ import kotlinx.coroutines.launch
 class PlumberDiaryApp : Application() {
     override fun onCreate() {
         super.onCreate()
+
+        // v1.6.0 — 2026-09-23: init di osmdroid PRIMA di qualunque MapView.
+        // Senza un user-agent personalizzato il tile server di OpenStreetMap
+        // rifiuta le richieste e la mappa della schermata Squadra resta vuota.
+        val osmConfig = OsmdroidConfigurationFactory.newOsmdroidConfiguration(this, "Plumber Diary")
+        osmConfig.userAgentValue = "PlumberDiary/1.0 (Android)"
+        Configuration.getInstance().load(osmConfig)
+
         FirebaseApp.initializeApp(this)
 
         // Ripristina CurrentSession da DataStore (teamId) + Firebase Auth
