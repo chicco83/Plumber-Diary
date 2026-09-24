@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ic_launcher_foreground.xml — v1.6.0 — 2026-09-23 — goccia d'acqua (idraulico)
+     bianca centrata nella zona sicura 66x66 dell'icona adattiva 108x108. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="2.6"
+        android:scaleY="2.6"
+        android:translateX="22.8"
+        android:translateY="22.8">
+        <!-- path "water_drop" di Material Icons (24x24) -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M12,2c-5.33,4.55 -8,8.48 -8,11.8 0,4.98 3.8,8.2 8,8.2s8,-3.22 8,-8.2C20,10.48 17.33,6.55 12,2z" />
+    </group>
+</vector>

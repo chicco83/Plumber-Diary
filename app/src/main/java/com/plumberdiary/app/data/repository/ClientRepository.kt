@@ -22,6 +22,12 @@ class ClientRepository(
         return snapshot.documents.mapNotNull { it.toObject<ClientRecord>() }
     }
 
+    /** v1.6.0 — 2026-09-23: lettura di un singolo cliente (schede e conferme). */
+    suspend fun getById(teamId: String, clientId: String): ClientRecord? {
+        val doc = firestore.document(FirestorePaths.client(teamId, clientId)).get().await()
+        return doc.toObject<ClientRecord>()
+    }
+
     suspend fun upsert(teamId: String, client: ClientRecord): String {
         val collection = firestore.collection(FirestorePaths.clients(teamId))
         val docRef = if (client.id.isBlank()) collection.document() else collection.document(client.id)

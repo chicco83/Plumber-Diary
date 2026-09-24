@@ -122,6 +122,18 @@ class LocationTrackingService : Service() {
             // e aggiorna la posizione live per la mappa squadra (requisito 11).
             val open = clusterer.currentOpenStop()
             if (open != null) {
+                // v1.6.0 — 2026-09-23: la sosta APERTA viene ora persistita su
+                // Firestore (endedAt = 0L, convenzione di getOpenStop): prima la
+                // scriveva solo alla chiusura finale, quindi resumeOpenStopIfAny() non
+                // trovava mai nulla dopo un kill/boot e HomeScreen non poteva
+                // mostrare la sosta in corso. Una scrittura ogni fix (1-5 min)
+                // è ben dentro le quote del piano Spark.
+                val openToPersist = if (lastStopId == null) open else open.copy(id = lastStopId!!)
+                lastStopId = stopRepository.upsert(
+                    session.teamId, session.uid,
+                    openToPersist.copy(endedAt = 0L, kind = classifyKind(openToPersist, settings)),
+                )
+
                 checkThresholdForRealtimeConfirmation(session.teamId, session.uid, open, settings)
                 if (settings.seeTeamLocationEnabled) {
                     teamRepository.updateOwnLiveLocation(
@@ -133,16 +145,21 @@ class LocationTrackingService : Service() {
         }
     }
 
+    /** Sede/deposito o pausa (requisito 13) → kind definitivo; altrimenti UNRESOLVED. */
+    private fun classifyKind(stop: Stop, settings: com.plumberdiary.app.data.model.UserSettings): StopKind = when {
+        DepotAndBreakFilter.isAtDepot(stop.lat, stop.lon, settings) -> StopKind.DEPOT
+        DepotAndBreakFilter.isDuringBreak(stop.startedAt, settings.breaks) -> StopKind.BREAK
+        else -> StopKind.UNRESOLVED
+    }
+
     private suspend fun finalizeStop(teamId: String, uid: String, stop: Stop, settings: com.plumberdiary.app.data.model.UserSettings) {
-        val previousStopEndedAt = stop.startedAt // per il calcolo km reale servirebbe il punto precedente:
-        // in questa versione scaffolding il campo distanceFromPreviousMeters viene
-        // completato dal recap (RecapViewModel), che ha visibilità sull'intera
-        // sequenza ordinata delle soste del giorno.
-        val kind = when {
-            DepotAndBreakFilter.isAtDepot(stop.lat, stop.lon, settings) -> StopKind.DEPOT
-            DepotAndBreakFilter.isDuringBreak(stop.startedAt, settings.breaks) -> StopKind.BREAK
-            else -> StopKind.UNRESOLVED
-        }
+        // Per il calcolo km reale servirebbe il punto precedente: il campo
+        // distanceFromPreviousMeters viene completato dal recap (RecapScreen),
+        // che ha visibilità sull'intera sequenza ordinata delle soste del giorno.
+        // v1.6.0 — 2026-09-23: chiude la sosta APERTA già persistita da onNewFix
+        // (stesso id, endedAt reale): prima, se lastStopId era null, si creava
+        // un documento nuovo orfano e la query getOpenStop restava sporca.
+        val kind = classifyKind(stop, settings)
         stopRepository.upsert(teamId, uid, stop.copy(id = lastStopId ?: "", kind = kind))
         lastStopId = null
     }
@@ -159,7 +176,10 @@ class LocationTrackingService : Service() {
 
         val elapsedMinutes = TimeUnit.MILLISECONDS.toMinutes(openStop.endedAt - openStop.startedAt)
         if (elapsedMinutes < settings.clientDetectionThresholdMinutes) return
-        if (openStop.realtimeConfirmedAt != null) return // già notificato per questa sosta
+        // v1.6.0 — 2026-09-24: si salta anche se l'utente ha premuto "Non ora"
+        // sulla notifica (realtimeDismissedAt), altrimenti la stessa sosta
+        // ri-notificherebbe ad ogni fix finché la soglia resta superata.
+        if (openStop.realtimeConfirmedAt != null || openStop.realtimeDismissedAt != null) return
 
         val clients = clientRepository.getAll(teamId)
         val suggested = ClientMatcher.findSuggestedClient(openStop.lat, openStop.lon, clients) ?: return

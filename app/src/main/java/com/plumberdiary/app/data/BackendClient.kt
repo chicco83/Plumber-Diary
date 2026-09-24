@@ -45,6 +45,45 @@ class BackendClient(
         post("accept-invite", JSONObject().put("teamId", teamId).put("inviteCode", inviteCode))
     }
 
+    // v1.6.0 — 2026-09-23: i due endpoint di invio email (requisiti 6/12 e 9)
+    // erano documentati in backend/README ma non ancora raggiungibili dall'app.
+
+    /** Requisito 6/12: recap giornaliero con foto HD a [recipientEmail]. */
+    suspend fun sendRecapEmail(
+        teamId: String,
+        dayStartMillis: Long,
+        dayEndMillis: Long,
+        recipientEmail: String,
+    ) {
+        post(
+            "send-recap-email",
+            JSONObject()
+                .put("teamId", teamId)
+                .put("dayStartMillis", dayStartMillis)
+                .put("dayEndMillis", dayEndMillis)
+                .put("recipientEmail", recipientEmail),
+        )
+    }
+
+    /** Requisito 9: mandatino ore PDF (base64) già confermato dall'utente. */
+    suspend fun sendMandatino(
+        teamId: String,
+        clientId: String,
+        recipientEmail: String,
+        periodLabel: String,
+        pdfBase64: String,
+    ) {
+        post(
+            "send-mandatino",
+            JSONObject()
+                .put("teamId", teamId)
+                .put("clientId", clientId)
+                .put("recipientEmail", recipientEmail)
+                .put("periodLabel", periodLabel)
+                .put("pdfBase64", pdfBase64),
+        )
+    }
+
     private suspend fun post(path: String, body: JSONObject): JSONObject = withContext(Dispatchers.IO) {
         val token = authRepository.getIdToken()
         val request = Request.Builder()

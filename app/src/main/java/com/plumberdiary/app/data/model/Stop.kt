@@ -21,7 +21,14 @@ data class Stop(
     val photoIds: List<String> = emptyList(),
     val distanceFromPreviousMeters: Double = 0.0, // requisito 16: km percorsi
     val calendarReminderEventId: String? = null,
+    // v1.6.0 — 2026-09-23: testo del promemoria (requisito 7). L'evento Google
+    // Calendar vero e proprio resta da collegare (vedi SETUP.md, "Prossimi
+    // step"): per ora il testo è salvato qui e mostrato in recap/dettaglio.
+    val reminderText: String = "",
     val realtimeConfirmedAt: Long? = null, // requisito 14: notifica in tempo reale accettata
+    // v1.6.0 — 2026-09-24: "Non ora" premuto sulla notifica (requisito 14) —
+    // impedisce al service di ri-notificare per la stessa sosta.
+    val realtimeDismissedAt: Long? = null,
     val confirmedInRecap: Boolean = false,
 )
 
