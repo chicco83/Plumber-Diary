@@ -1,6 +1,6 @@
 # Context — Plumber Diary
 
-Versione: 1.5.0 — 2026-09-20 00:30 UTC (v1.4.0 — 2026-09-20 00:10 UTC e precedenti, vedi changelog.md)
+Versione: 1.6.0 — 2026-09-24 (v1.5.0 — 2026-09-20 00:30 UTC e precedenti, vedi changelog.md)
 
 ## Obiettivo
 
@@ -70,6 +70,12 @@ Abbiamo già sviluppato e verificato in produzione un'app Android con Firebase +
 - **Notifiche push**: FCM. Per contenuti che devono attivare comportamenti anche ad app in background/uccisa (es. sveglia con nuovo recap disponibile, o promemoria squadra) usare messaggi **data-only**, non `notification`-only — lezione dal progetto gemello: un payload `notification`+`data` viene scartato dai gestori custom se non gestito esplicitamente prima del controllo su `message.notification`.
 - **Auth**: Firebase Authentication con provider Google, in comune fra i membri della squadra.
 - **Foto cliente**: **Firebase Storage** (piano gratuito, non richiede Blaze), path `teams/{teamId}/clients/{clientId}/photos/{photoId}.jpg`; upload solo di immagini già ridimensionate/compresse lato client per restare ampiamente sotto i limiti gratuiti (vedi sotto).
+
+### Account e isolamento dal progetto gemello (decisione del 2026-09-24)
+
+- **Firebase**: stesso account Google del family tracker, ma **progetto Firebase nuovo e separato**. Le quote Spark (letture/scritture Firestore, storage, ecc.) sono per progetto, quindi ogni app mantiene le proprie quote intere; inoltre regole di sicurezza e utenti Auth restano isolati — un errore nelle regole di Plumber Diary non può esporre le posizioni del family tracker. Il limite di progetti gratuiti per account (circa 5–10) lascia margine.
+- **Vercel**: **account nuovo**, separato da quello del family tracker. Motivo principale: se un account venisse sospeso, il backend del family tracker (SOS, geofence, chat) non ne sarebbe coinvolto.
+- **Rischio accettato consapevolmente dall'utente**: il piano Vercel Hobby è riservato a uso personale non commerciale, e Plumber Diary, in quanto strumento di lavoro per ore fatturabili, rientra nella definizione di uso commerciale dei termini Vercel. Valutate e scartate per ora le alternative (Firebase Blaze con Cloud Functions, che richiede una carta; Vercel Pro, circa 20 $/mese). Se in futuro l'account venisse sospeso o si volesse mettersi in regola, la migrazione più diretta è verso Cloud Functions su Blaze: gli endpoint in `backend/api/` usano già `firebase-admin` e si spostano quasi uno a uno.
 
 ### Limiti del piano gratuito e margini per un piccolo team
 

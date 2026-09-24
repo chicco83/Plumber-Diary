@@ -44,3 +44,7 @@ Prima stesura dell'architettura tecnica e dello scaffolding di codice (finora so
 - `PlumberDiaryNavHost` ora apre su Login → Selezione/Creazione squadra → Home, invece di entrare direttamente in Home senza autenticazione.
 - `PlumberDiaryApp.onCreate()` ripristina `CurrentSession` da Firebase Auth + `SessionStore` all'avvio (necessario perché `BootRestartReceiver`/`LocationTrackingService` la richiedono).
 - Non ancora creato un vero progetto Firebase: impossibile farlo da questa sessione (nessun browser/credenziali). Chiesto all'utente come preferisce sbloccarlo; ha scelto di fornire una chiave service account generata dalla Console, da usare via API una tantum (poi cancellata) — stesso procedimento già impiegato nel progetto gemello gwatch-child-tracker.
+
+## 1.6.0 — 2026-09-24
+- Decisione sugli account (solo documentazione, nessuna modifica al codice): struttura attuale mantenuta (Firestore Spark + Vercel Hobby + GitHub Actions). Firebase su un **progetto nuovo** nello stesso account Google del family tracker, per avere quote Spark, regole di sicurezza e utenti Auth separati. Vercel su un **account nuovo**, così un'eventuale sospensione non coinvolge il backend del family tracker.
+- Registrato in `context.md` il rischio accettato: il piano Vercel Hobby è riservato a uso non commerciale e Plumber Diary rientra nell'uso commerciale; la via di migrazione prevista, se servisse, è Cloud Functions su Firebase Blaze.
