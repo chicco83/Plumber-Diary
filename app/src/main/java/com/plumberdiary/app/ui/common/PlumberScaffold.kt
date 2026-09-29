@@ -18,7 +18,7 @@ import com.plumberdiary.app.ui.Routes
 
 /**
  * Tab bar comune a Home/Recap/Squadra/Opzioni, come nel mockup (le altre
- * schermate — Dettaglio, Cliente, Storico, Dashboard, Rapportino, Notifica —
+ * schermate — Dettaglio, Cliente, Storico, Dashboard, Mandatino, Notifica —
  * si aprono sopra e usano una AppBar con la sola freccia indietro, non
  * questa tab bar).
  */

@@ -52,13 +52,14 @@ deploy Vercel (oggi è un placeholder).
     (requisito 14).
 - **Foto a doppia risoluzione** (`photo/PhotoUploader.kt`, requisito 12).
 - **PDF**: `pdf/MandatinoPdfGenerator.kt` (requisito 9) e
-  `pdf/RapportinoPdfGenerator.kt` (requisito 15, firma sempre saltabile).
+  la firma del cliente sempre saltabile (requisito 15) nello stesso documento:
+  mandatino e "rapportino" sono la stessa cosa (unificati nella v1.11.0).
 - **Km percorsi**: `recap/DailyDistanceCalculator.kt` (requisito 16).
 - **Repository Firestore** (`data/repository/`): `StopRepository`,
   `ClientRepository`, `TeamRepository`, `SettingsRepository`.
 - **Navigazione e schermate** (`ui/`): una route per ogni schermata del
   mockup (Home, Recap, Dettaglio, Cliente, Squadra, Opzioni, Storico,
-  Dashboard, Rapportino, Notifica conferma) — i layout dettagliati sono
+  Dashboard, Mandatino, Notifica conferma) — i layout dettagliati sono
   marcati `TODO` con riferimento al relativo file `.dc.html` del mockup, la
   struttura/navigazione/collegamento ai repository è già pronta.
 

@@ -3,7 +3,7 @@
 // Modulo Android dell'app Plumber Diary. Scelte principali (vedi context.md
 // per il ragionamento completo):
 // - Jetpack Compose per la UI (Home, Recap, Dettaglio, Cliente, Squadra,
-//   Opzioni, Storico, Dashboard, Rapportino).
+//   Opzioni, Storico, Dashboard, Mandatino).
 // - Firebase (Auth, Firestore, Storage, Messaging) come backend dati/foto/push,
 //   piano Spark gratuito — stesso stack già validato in produzione nel
 //   progetto gemello chicco83/gwatch-child-tracker.
@@ -106,7 +106,7 @@ dependencies {
     // --- Persistenza della sessione (uid/teamId) tra riavvii dell'app ---
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
-    // --- Generazione PDF (mandatino ore, rapportino) ---
+    // --- Generazione PDF (mandatino ore, con firma del cliente) ---
     implementation("com.itextpdf:itext7-core:8.0.5")
 
     // --- Caricamento immagini (minature delle foto "display" di Storage nelle

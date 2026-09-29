@@ -1,10 +1,10 @@
-// RecapScreen.kt — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-23)
+// RecapScreen.kt — v1.11.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-23)
 //
 // Versione precedente (v1.0.0 — 2026-09-20 00:10 UTC): stub con solo il titolo
 // "Riepilogo giornata", sostituita il 2026-09-23 dall'implementazione reale:
 // una card per sosta del giorno con cliente suggerito (ClientMatcher su
 // posizioni note), note modificabili, km dalla sosta precedente (requisito 16),
-// link a Dettaglio/Rapportino, conferma recap e invio email all'amministrazione
+// link a Dettaglio/Mandatino, conferma recap e invio email all'amministrazione
 // (requisiti 6/12) tramite l'endpoint Vercel send-recap-email.
 package com.plumberdiary.app.ui.recap
 
@@ -180,8 +180,14 @@ fun RecapScreen(navController: NavHostController) {
                                         Text("Dettaglio")
                                     }
                                     Spacer(Modifier.weight(1f).height(0.dp))
-                                    OutlinedButton(onClick = { navController.navigate(Routes.rapportino(stop.id)) }) {
-                                        Text("Rapportino con firma")
+                                    // v1.11.0 — 2026-09-29: era "Rapportino con firma" (stessa cosa
+                                    // del mandatino). Il mandatino è per cliente: serve una sosta
+                                    // già associata a un cliente.
+                                    OutlinedButton(
+                                        onClick = { stop.clientId?.let { navController.navigate(Routes.mandatino(it)) } },
+                                        enabled = stop.clientId != null,
+                                    ) {
+                                        Text("Mandatino")
                                     }
                                 }
                             }

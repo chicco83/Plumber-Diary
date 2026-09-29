@@ -123,7 +123,7 @@ class StopRepository(
         return snapshot.documents.firstOrNull()?.toObject<Stop>()
     }
 
-    /** v1.7.0 — 2026-09-23: lettura di una singola sosta (schermate Dettaglio/Rapportino). */
+    /** v1.7.0 — 2026-09-23: lettura di una singola sosta (schermate Dettaglio, conferma in tempo reale). */
     suspend fun getStop(teamId: String, uid: String, stopId: String): Stop? {
         val doc = firestore.document(FirestorePaths.stop(teamId, uid, stopId)).get().await()
         return doc.toObject<Stop>()

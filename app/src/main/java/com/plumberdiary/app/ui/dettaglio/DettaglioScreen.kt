@@ -1,4 +1,4 @@
-// DettaglioScreen.kt — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-23)
+// DettaglioScreen.kt — v1.11.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-23)
 //
 // Versione precedente (v1.0.0 — 2026-09-20 00:10 UTC): stub con solo il titolo,
 // sostituita il 2026-09-23 dal form completo di una singola sosta (requisiti
@@ -190,6 +190,11 @@ fun DettaglioScreen(navController: NavHostController, stopId: String) {
                             // nessuna schermata ci portava).
                             TextButton(onClick = { navController.navigate(Routes.cliente(current.clientId!!)) }) {
                                 Text("Apri scheda cliente")
+                            }
+                            // v1.11.0 — 2026-09-29: mandatino da far firmare sul posto,
+                            // raggiungibile direttamente dalla sosta in corso.
+                            TextButton(onClick = { navController.navigate(Routes.mandatino(current.clientId!!)) }) {
+                                Text("Mandatino")
                             }
                             TextButton(onClick = { stop = current.copy(clientId = null, kind = StopKind.UNRESOLVED) }) {
                                 Text("Rimuovi cliente")

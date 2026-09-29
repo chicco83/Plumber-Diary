@@ -1,6 +1,6 @@
 # SETUP — Plumber Diary (configurazioni manuali)
 
-Versione: 1.10.0 — 2026-09-29 (v1.9.0 / v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-24)
+Versione: 1.11.0 — 2026-09-29 (v1.10.0 / v1.9.0 / v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-24)
 
 Tutto quello che va fatto **fuori dal codice** per portare l'app in piedi: progetto
 Firebase, regole di sicurezza, deploy Vercel del backend e primo build Android.
@@ -164,19 +164,19 @@ leggono da qui: non cercare più stringhe `vercel.app` sparse.
 - [ ] **Dettaglio**: correggi orari, associa/crea cliente, aggiungi materiali dal
       listino, allega una foto dalla galleria → le miniature compaiono subito.
 - [ ] **Cliente** (Opzioni → *Anagrafica clienti e listino articoli*, oppure
-      *Apri scheda cliente* dal Dettaglio): modifica anagrafica; nel mandatino *Oggi*
-      con una sosta ancora in corso (deve essere conteggiata fino ad ora) e con
-      *Includi le ore dei colleghi* (colonna "Tecnico" nel PDF, anche senza recap), *Mandatino delle
-      ore* → conferma esplicita → mail al destinatario con PDF allegato.
+      *Apri scheda cliente* dal Dettaglio): modifica anagrafica, foto, listino;
+      *Crea mandatino* apre la stessa schermata del punto Mandatino.
 - [ ] **Squadra**: generi un codice invito; da un secondo telefono/account fai
       login e *Unisciti* (ID squadra + codice) → entrambi i marker compaiono sulla
       mappa osmdroid. (Se la mappa resta grigia: il tile server OSM a volte è lento
       al primo caricamento — attendi qualche secondo / zooma.)
 - [ ] **Opzioni**: imposta sede ("usa posizione attuale") e una pausa → una sosta
       in quel raggio/orario non genera mai proposte cliente né notifiche.
-- [ ] **Rapportino** (da Recap, su una sosta con cliente): firma sul canvas →
-      *Genera rapportino* → si apre la share sheet con il PDF; anche *Salta la
-      firma* genera il PDF (con dicitura "non firmato").
+- [ ] **Mandatino** (dal Dettaglio della sosta in corso, con cliente associato):
+      periodo *Oggi* con la sosta ancora aperta (conteggiata fino ad ora),
+      prova *Includi le ore dei colleghi*; firma sul riquadro → *Conferma e invia
+      firmato* → arriva la mail con il PDF firmato; prova anche *Salta la firma*
+      (PDF con "non firmato") e *Condividi PDF*.
 - [ ] **Storico** (giorni precedenti, correzione massiva scegliendo il cliente;
       con "Vedi recap dei colleghi" attivo, selettore del collega in sola
       lettura) e **Dashboard mensile** (ore/km/materiali/interventi per cliente).

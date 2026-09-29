@@ -1,4 +1,4 @@
-// PlumberDiaryNavHost.kt — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-24: BackendConfig; v1.1.0 — 2026-09-20 00:30 UTC)
+// PlumberDiaryNavHost.kt — v1.11.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-24: BackendConfig; v1.1.0 — 2026-09-20 00:30 UTC)
 package com.plumberdiary.app.ui
 
 import androidx.compose.runtime.Composable
@@ -28,7 +28,7 @@ import com.plumberdiary.app.ui.dettaglio.DettaglioScreen
 import com.plumberdiary.app.ui.home.HomeScreen
 import com.plumberdiary.app.ui.notifica.NotificaConfermaScreen
 import com.plumberdiary.app.ui.opzioni.OpzioniScreen
-import com.plumberdiary.app.ui.rapportino.RapportinoScreen
+import com.plumberdiary.app.ui.mandatino.MandatinoScreen
 import com.plumberdiary.app.ui.recap.RecapScreen
 import com.plumberdiary.app.ui.squadra.SquadraScreen
 import com.plumberdiary.app.ui.storico.StoricoScreen
@@ -72,12 +72,14 @@ object Routes {
     const val OPZIONI = "opzioni"
     const val STORICO = "storico"
     const val DASHBOARD = "dashboard"
-    const val RAPPORTINO = "rapportino/{stopId}"
+    // v1.11.0 — 2026-09-29: il rapportino è lo stesso documento del mandatino.
+    // Prima: const val RAPPORTINO = "rapportino/{stopId}"
+    const val MANDATINO = "mandatino/{clientId}"
     const val NOTIFICA_CONFERMA = "notifica_conferma/{clientId}"
 
     fun dettaglio(stopId: String) = "dettaglio/$stopId"
     fun cliente(clientId: String) = "cliente/$clientId"
-    fun rapportino(stopId: String) = "rapportino/$stopId"
+    fun mandatino(clientId: String) = "mandatino/$clientId"
     fun notificaConferma(clientId: String) = "notifica_conferma/$clientId"
 }
 
@@ -179,8 +181,8 @@ fun PlumberDiaryNavHost(
         composable(Routes.OPZIONI) { OpzioniScreen(navController) }
         composable(Routes.STORICO) { StoricoScreen(navController) }
         composable(Routes.DASHBOARD) { DashboardScreen(navController) }
-        composable(Routes.RAPPORTINO) { backStackEntry ->
-            RapportinoScreen(navController, stopId = backStackEntry.arguments?.getString("stopId").orEmpty())
+        composable(Routes.MANDATINO) { backStackEntry ->
+            MandatinoScreen(navController, clientId = backStackEntry.arguments?.getString("clientId").orEmpty())
         }
         composable(Routes.NOTIFICA_CONFERMA) { backStackEntry ->
             NotificaConfermaScreen(navController, clientId = backStackEntry.arguments?.getString("clientId").orEmpty())

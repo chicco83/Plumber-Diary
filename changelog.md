@@ -123,3 +123,11 @@ Correzione del mandatino dopo il chiarimento dell'utente: si compila **sul posto
 - Incluse anche le soste **senza cliente associato** che si trovano in una posizione nota del cliente: sul posto il collega di solito non ha ancora associato il cliente. La finestra di conferma le conta e le segnala da verificare.
 - Periodo **"Oggi"** aggiunto e predefinito; nel PDF compare la data invece di "Oggi".
 
+## 1.11.0 — 2026-09-29
+**Mandatino e rapportino unificati.** Sono lo stesso documento: su chiarimento dell'utente, il "rapportino con firma" (introdotto nella 1.3.0 come funzione nuova) coincideva con il mandatino delle ore già richiesto al requisito 9. È stato un errore di progettazione, mio. Ora esiste un solo documento, il **mandatino**:
+- **una sola schermata**, `ui/mandatino/MandatinoScreen.kt`, raggiungibile dal Dettaglio della sosta (sul posto), dalla card del Recap e dalla scheda cliente;
+- **contenuto**: periodo (Oggi predefinito, mese, 30 giorni), ore dei colleghi a scelta, riepilogo con soste in corso e soste per posizione segnalate, **firma del cliente per accettazione** (sempre saltabile), invio all'email del cliente dopo la conferma del tecnico oppure condivisione del PDF con un'altra app;
+- **un solo generatore**, `pdf/MandatinoPdfGenerator.kt`: ore, colonna Tecnico, materiali aggregati, dichiarazione di accettazione e firma, oppure "non firmato";
+- **rimossi** `RapportinoScreen`, `RapportinoPdfGenerator` e la route `rapportino/{stopId}`; dalla scheda cliente è stata spostata la vecchia finestra di conferma;
+- aggiornati i requisiti 9 e 15 in `context.md`, il manuale, `SETUP.md` e `app/README.md`.
+
