@@ -1,6 +1,6 @@
 # Context — Plumber Diary
 
-Versione: 1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-24 di Qwen, v1.6.0 — 2026-09-24 e precedenti, vedi changelog.md)
+Versione: 1.9.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-24 di Qwen; precedenti, vedi changelog.md)
 
 ## Obiettivo
 
@@ -108,7 +108,7 @@ Numeri di riferimento del piano Firebase **Spark** (gratuito, nessuna carta) e V
   - le opzioni modificate valgono per il tracciamento entro 10 minuti;
   - la mail di recap parte alla conferma del recap (vedi sopra);
   - i recap dei colleghi sono in sola lettura e mostrano solo i giorni che il collega ha confermato.
-- **Da decidere**: il mandatino ore di un cliente oggi include solo le proprie ore. In una squadra potrebbe dover includere anche quelle dei colleghi presso lo stesso cliente.
+- **Mandatino con le ore dei colleghi** (decisione del 2026-09-29): al momento della creazione una casella "Includi le ore dei colleghi" (default OFF) aggiunge le ore degli altri membri presso lo stesso cliente. Dei colleghi entrano solo i giorni già confermati nel loro recap, così nel documento per il cliente non finiscono orari e note non ancora rivisti. Il PDF aggiunge la colonna "Tecnico" e il riepilogo delle ore per tecnico.
 - **Non ancora iniziati**:
   - integrazione reale con Google Calendar (oggi il promemoria è solo un testo salvato sulla sosta);
   - export CSV;

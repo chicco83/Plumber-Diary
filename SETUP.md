@@ -1,6 +1,6 @@
 # SETUP — Plumber Diary (configurazioni manuali)
 
-Versione: 1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-24)
+Versione: 1.9.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-24)
 
 Tutto quello che va fatto **fuori dal codice** per portare l'app in piedi: progetto
 Firebase, regole di sicurezza, deploy Vercel del backend e primo build Android.
@@ -164,7 +164,8 @@ leggono da qui: non cercare più stringhe `vercel.app` sparse.
 - [ ] **Dettaglio**: correggi orari, associa/crea cliente, aggiungi materiali dal
       listino, allega una foto dalla galleria → le miniature compaiono subito.
 - [ ] **Cliente** (Opzioni → *Anagrafica clienti e listino articoli*, oppure
-      *Apri scheda cliente* dal Dettaglio): modifica anagrafica, *Mandatino delle
+      *Apri scheda cliente* dal Dettaglio): modifica anagrafica; nel mandatino
+      prova anche l'opzione *Includi le ore dei colleghi* (colonna "Tecnico" nel PDF), *Mandatino delle
       ore* → conferma esplicita → mail al destinatario con PDF allegato.
 - [ ] **Squadra**: generi un codice invito; da un secondo telefono/account fai
       login e *Unisciti* (ID squadra + codice) → entrambi i marker compaiono sulla
@@ -219,6 +220,3 @@ controllando la Console Storage.
 3. **Push FCM lato server**: `PlumberFcmService` gestisce già i payload data-only,
    manca la registrazione del token lato backend. Il recap serale non ne ha
    bisogno: dalla 1.8.0 è programmato sul telefono con WorkManager.
-4. **Mandatino con le ore dei colleghi**: oggi include solo le proprie ore presso
-   il cliente; da decidere se in una squadra deve includere anche quelle degli
-   altri membri.

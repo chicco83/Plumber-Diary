@@ -1,6 +1,6 @@
 # Manuale funzionale — Plumber Diary
 
-Versione: 1.8.0 — 2026-09-29 (v1.5.0 — 2026-09-20 00:30 UTC e precedenti, vedi changelog.md)
+Versione: 1.9.0 — 2026-09-29 (v1.8.0 — 2026-09-29 e precedenti, vedi changelog.md)
 
 > Nota: questo manuale descrive il comportamento previsto dell'app a
 > progetto completo. Lo stato di avanzamento reale dell'implementazione è
@@ -26,7 +26,7 @@ Plumber Diary è un'app Android che traccia automaticamente dove sei stato duran
    - creare un promemoria collegato su Google Calendar.
    Premendo **Conferma recap** le modifiche vengono salvate e, se l'invio via email è attivo (lo è di default), il riepilogo parte subito verso l'indirizzo dell'amministrazione. Se un intervento ha foto allegate, queste vengono incluse **in alta risoluzione** — non nella versione compressa usata per la visualizzazione in app. C'è anche un pulsante per inviarlo di nuovo a mano.
 3. **Anagrafica cliente** (Opzioni → *Anagrafica clienti e listino articoli*, oppure *Apri scheda cliente* dal dettaglio di una sosta): dati anagrafici (nome/ragione sociale, telefono, P.IVA/C.F., indirizzo), foto allegate dalla galleria del telefono (es. contatore, impianto, prima/dopo intervento), elenco delle posizioni note collegate, listino articoli (codice, descrizione, prezzo, quantità) usato negli interventi, ed email dedicata per l'invio del mandatino ore.
-4. **Mandatino delle ore (PDF)**: dalla scheda cliente puoi generare un PDF con ore e materiali del periodo e inviarlo all'email del cliente. L'invio richiede sempre una conferma esplicita: l'app mostra un riepilogo (periodo, ore, materiali, destinatario) e invia solo dopo che premi "Conferma e invia".
+4. **Mandatino delle ore (PDF)**: dalla scheda cliente puoi generare un PDF con ore e materiali del periodo e inviarlo all'email del cliente. Nella finestra di conferma puoi spuntare **Includi le ore dei colleghi**: vengono aggiunte le ore degli altri membri della squadra presso lo stesso cliente (solo i giorni che hanno già confermato nel loro recap), e il PDF indica per ogni intervento il tecnico che lo ha svolto. L'invio richiede sempre una conferma esplicita: l'app mostra un riepilogo (periodo, ore, materiali, destinatario) e invia solo dopo che premi "Conferma e invia".
 5. **Storico**: nel menu Opzioni puoi rivedere i recap degli ultimi 30 giorni ed effettuare correzioni massive: selezioni i giorni, scegli il cliente e lo assegni a tutte le soste di quei giorni ancora senza cliente. Se hai attivato "Vedi i recap dei colleghi", un selettore in alto ti mostra, in sola lettura, i recap che i colleghi hanno già confermato.
 6. **Squadra**: se fai parte di una squadra, nella scheda *Squadra* vedi su una mappa condivisa dove si trovano in questo momento gli altri membri (se hanno l'opzione di visibilità attiva) e il loro stato (attivo/in pausa). Anagrafica clienti e listino articoli sono condivisi da tutta la squadra: un cliente o un articolo aggiunto da un collega è visibile a tutti.
 7. **Dashboard mensile**: dalle Opzioni, riepilogo del mese con ore totali, km percorsi, valore materiali e numero interventi, ripartiti per cliente.

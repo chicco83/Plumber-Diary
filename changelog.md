@@ -111,3 +111,8 @@ Review completa della 1.7.0 e correzione di tutti i problemi trovati. **Non anco
 - Rinumerata come 1.7.0 la versione di Qwen (vedi sopra).
 - Aggiornate le intestazioni di versione dei file che la 1.7.0 aveva modificato senza incrementarle.
 - Aggiornati `context.md`, `manual.md` e `SETUP.md`.
+
+## 1.9.0 — 2026-09-29
+- **Mandatino con le ore dei colleghi**: nella finestra di conferma del mandatino c'è la casella "Includi le ore dei colleghi" (default OFF). Se attiva, vengono aggiunte le ore degli altri membri della squadra presso lo stesso cliente, limitate ai giorni che ciascun collega ha già confermato nel recap. Nella finestra compare il riepilogo per tecnico; il PDF (`MandatinoPdfGenerator`) aggiunge la colonna "Tecnico" e le ore totali per tecnico. Senza la casella il mandatino resta come prima.
+- **Autore dei commit di Qwen**: vedi la nota nella voce 1.7.0.
+

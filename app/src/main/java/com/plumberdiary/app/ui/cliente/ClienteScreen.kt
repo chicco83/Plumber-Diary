@@ -1,4 +1,4 @@
-// ClienteScreen.kt — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-23)
+// ClienteScreen.kt — v1.9.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-23)
 //
 // Versione precedente (v1.0.0 — 2026-09-20 00:10 UTC): stub con solo il titolo,
 // sostituita il 2026-09-23 dalla scheda completa (requisiti 8/9/10/11):
@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,6 +53,7 @@ import com.plumberdiary.app.data.model.Stop
 import com.plumberdiary.app.data.repository.ArticleRepository
 import com.plumberdiary.app.data.repository.ClientRepository
 import com.plumberdiary.app.data.repository.StopRepository
+import com.plumberdiary.app.data.repository.TeamRepository
 import com.plumberdiary.app.pdf.MandatinoPdfGenerator
 import com.plumberdiary.app.photo.PhotoUploader
 import com.plumberdiary.app.ui.common.Format
@@ -83,6 +85,11 @@ fun ClienteScreen(navController: NavHostController, clientId: String) {
     var mandatinoRecipient by remember { mutableStateOf("") }
     var mandatinoStops by remember { mutableStateOf<List<Stop>>(emptyList()) }
     var mandatinoSending by remember { mutableStateOf(false) }
+    // v1.9.0 — 2026-09-29: opzione "includi le ore dei colleghi" scelta al
+    // momento della creazione (default OFF: solo le proprie ore, come prima).
+    var mandatinoIncludeTeam by remember { mutableStateOf(false) }
+    var mandatinoTechnicians by remember { mutableStateOf<Map<String, String>>(emptyMap()) } // stopId -> tecnico
+    var mandatinoLoading by remember { mutableStateOf(false) }
 
     val clientRepository = remember { ClientRepository() }
     val articleRepository = remember { ArticleRepository() }
@@ -134,21 +141,64 @@ fun ClienteScreen(navController: NavHostController, clientId: String) {
         }
     }
 
+    // Versione precedente (v1.7.0 — 2026-09-23), sostituita il 2026-09-29:
+    // leggeva solo le soste di chi genera il mandatino.
+    //
+    // fun prepareMandatino() {
+    //     ...
+    //     val all = stopRepository.getStopsForDay(session.teamId, session.uid, fromMillis, System.currentTimeMillis())
+    //     mandatinoStops = all.filter { it.clientId == c.id && it.endedAt > 0L }.sortedBy { it.startedAt }
+    //     mandatinoRecipient = c.hoursReportEmail.ifBlank { "" }
+    //     showMandatinoConfirm = true
+    // }
+
+    /**
+     * Carica gli interventi del periodo presso il cliente. Con [includeTeam]
+     * legge anche le soste dei colleghi (le regole Firestore lo consentono ai
+     * membri della squadra), ma solo i giorni che ciascun collega ha già
+     * confermato nel proprio recap: orari e note non ancora rivisti non
+     * finiscono in un documento per il cliente. Le proprie soste sono incluse
+     * anche se non confermate, come prima.
+     */
+    suspend fun loadMandatinoStops(c: ClientRecord, includeTeam: Boolean) {
+        val s = session ?: return
+        val cal = Calendar.getInstance()
+        val fromMillis = if (mandatinoPeriod == "Questo mese") {
+            cal.set(Calendar.DAY_OF_MONTH, 1); cal.set(Calendar.HOUR_OF_DAY, 0)
+            cal.set(Calendar.MINUTE, 0); cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
+            cal.timeInMillis
+        } else {
+            System.currentTimeMillis() - 30L * 24 * 3_600_000
+        }
+        val now = System.currentTimeMillis()
+        fun List<Stop>.forClient() = filter { it.clientId == c.id && it.endedAt > 0L }
+
+        if (!includeTeam) {
+            mandatinoStops = stopRepository.getStopsForDay(s.teamId, s.uid, fromMillis, now).forClient().sortedBy { it.startedAt }
+            mandatinoTechnicians = emptyMap()
+            return
+        }
+
+        val technicians = mutableMapOf<String, String>()
+        val collected = mutableListOf<Stop>()
+        for (member in TeamRepository().getMembers(s.teamId)) {
+            val name = member.displayName.ifBlank { member.email.ifBlank { "Tecnico" } }
+            val stops = stopRepository.getStopsForDay(s.teamId, member.uid, fromMillis, now).forClient()
+                .filter { member.uid == s.uid || it.confirmedInRecap }
+            stops.forEach { technicians[it.id] = name }
+            collected += stops
+        }
+        mandatinoStops = collected.sortedBy { it.startedAt }
+        mandatinoTechnicians = technicians
+    }
+
     fun prepareMandatino() {
         val c = client ?: return
         if (session == null) return
         scope.launch {
             try {
-                val cal = Calendar.getInstance()
-                val fromMillis = if (mandatinoPeriod == "Questo mese") {
-                    cal.set(Calendar.DAY_OF_MONTH, 1); cal.set(Calendar.HOUR_OF_DAY, 0)
-                    cal.set(Calendar.MINUTE, 0); cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
-                    cal.timeInMillis
-                } else {
-                    System.currentTimeMillis() - 30L * 24 * 3_600_000
-                }
-                val all = stopRepository.getStopsForDay(session.teamId, session.uid, fromMillis, System.currentTimeMillis())
-                mandatinoStops = all.filter { it.clientId == c.id && it.endedAt > 0L }.sortedBy { it.startedAt }
+                mandatinoIncludeTeam = false
+                loadMandatinoStops(c, includeTeam = false)
                 mandatinoRecipient = c.hoursReportEmail.ifBlank { "" }
                 showMandatinoConfirm = true
             } catch (e: Exception) { message = e.message }
@@ -263,7 +313,32 @@ fun ClienteScreen(navController: NavHostController, clientId: String) {
             text = {
                 Column {
                     Text("Cliente: ${client!!.name}")
-                    Text("Periodo: $mandatinoPeriod — ${mandatinoStops.size} interventi, ${Format.durationLabel(totalMinutes)}")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = mandatinoIncludeTeam,
+                            enabled = !mandatinoLoading && !mandatinoSending,
+                            onCheckedChange = { checked ->
+                                val cc = client ?: return@Checkbox
+                                mandatinoIncludeTeam = checked
+                                mandatinoLoading = true
+                                scope.launch {
+                                    try { loadMandatinoStops(cc, checked) }
+                                    catch (e: Exception) { message = e.message }
+                                    finally { mandatinoLoading = false }
+                                }
+                            },
+                        )
+                        Text("Includi le ore dei colleghi (solo giorni già confermati)")
+                    }
+                    Text(
+                        if (mandatinoLoading) "Caricamento interventi..."
+                        else "Periodo: $mandatinoPeriod — ${mandatinoStops.size} interventi, ${Format.durationLabel(totalMinutes)}",
+                    )
+                    if (mandatinoIncludeTeam && !mandatinoLoading) {
+                        mandatinoStops.groupBy { mandatinoTechnicians[it.id] ?: "—" }.forEach { (name, list) ->
+                            Text("  $name: ${list.size} interventi, ${Format.durationLabel(list.sumOf { Format.durationMinutes(it.startedAt, it.endedAt) })}")
+                        }
+                    }
                     Text("Materiali: ${Format.euros(totalMaterials)}")
                     OutlinedTextField(
                         value = mandatinoRecipient, onValueChange = { mandatinoRecipient = it },
@@ -275,7 +350,7 @@ fun ClienteScreen(navController: NavHostController, clientId: String) {
             confirmButton = {
                 Button(onClick = {
                     val s = session; val cc = client!!
-                    if (s == null || mandatinoRecipient.isBlank() || mandatinoStops.isEmpty()) return@Button
+                    if (s == null || mandatinoLoading || mandatinoRecipient.isBlank() || mandatinoStops.isEmpty()) return@Button
                     mandatinoSending = true
                     scope.launch {
                         try {
@@ -283,7 +358,10 @@ fun ClienteScreen(navController: NavHostController, clientId: String) {
                             val base64 = withContext(Dispatchers.IO) {
                                 val pdfFile = File(context.cacheDir, "mandatino-${cc.id}.pdf")
                                 java.io.FileOutputStream(pdfFile).use { out ->
-                                    MandatinoPdfGenerator.generate(out, cc, mandatinoStops, mandatinoPeriod)
+                                    MandatinoPdfGenerator.generate(
+                                        out, cc, mandatinoStops, mandatinoPeriod,
+                                        technicianByStopId = if (mandatinoIncludeTeam) mandatinoTechnicians else null,
+                                    )
                                 }
                                 Base64.getEncoder().encodeToString(pdfFile.readBytes())
                             }
