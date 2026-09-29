@@ -1,4 +1,4 @@
-// PhotoUploader.kt — v1.12.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.0.0 — 2026-09-20 00:10 UTC)
+// PhotoUploader.kt — v1.13.0 — 2026-09-29 (v1.12.0 / v1.8.0 — 2026-09-29; v1.0.0 — 2026-09-20 00:10 UTC)
 package com.plumberdiary.app.photo
 
 import android.content.Context
@@ -6,18 +6,32 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
-import com.google.firebase.storage.FirebaseStorage
 import androidx.exifinterface.media.ExifInterface
-import com.google.firebase.storage.ktx.storageMetadata
+import com.plumberdiary.app.auth.AuthRepository
+import com.plumberdiary.app.data.BackendClient
+import com.plumberdiary.app.data.BackendConfig
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.concurrent.TimeUnit
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import kotlin.math.min
 
 /**
- * Requisito 12: ogni foto genera DUE copie su Firebase Storage (vedi
+ * v1.13.0 — 2026-09-29: le foto non vanno più su Firebase Storage (dai progetti
+ * nuovi richiede il piano Blaze, con carta) ma su uno storage a oggetti
+ * compatibile S3 (Backblaze B2 consigliato, vedi backend/api/_lib/objectStore.js).
+ * L'app non ha credenziali: chiede al backend URL firmati a scadenza
+ * ([BackendClient.photoUploadUrls], che controlla squadra e permessi come
+ * facevano le storage.rules) e carica con un PUT HTTP diretto, senza passare
+ * i byte da Vercel. Chiavi degli oggetti e firma di upload() invariate: le
+ * schermate che lo chiamano non cambiano.
+ *
+ * Requisito 12: ogni foto genera DUE copie nello storage (vedi
  * context.md, "Foto (cliente e/o intervento)"):
  *  - "display": compressa, conservata stabilmente, per la UI e la sync
  *    di squadra;
@@ -30,9 +44,15 @@ import kotlin.math.min
  * (ActivityResultContracts.PickMultipleVisualMedia), quindi come Uri di
  * contenuto, non da un permesso di storage esplicito.
  */
+// Prima (v1.12.0): class PhotoUploader(private val context: Context, private val storage: FirebaseStorage = FirebaseStorage.getInstance())
 class PhotoUploader(
     private val context: Context,
-    private val storage: FirebaseStorage = FirebaseStorage.getInstance(),
+    private val backendClient: BackendClient = BackendClient(BackendConfig.BASE_URL, AuthRepository(context)),
+    private val httpClient: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .writeTimeout(120, TimeUnit.SECONDS) // originali da 5-10 MB su rete mobile
+        .readTimeout(60, TimeUnit.SECONDS)
+        .build(),
 ) {
     // Versione precedente (v1.0.0 — 2026-09-20), sostituita il 2026-09-29:
     // originalPath era obbligatorio, così la scheda cliente — che non ha una
@@ -63,21 +83,47 @@ class PhotoUploader(
         // v1.8.0 — 2026-09-29: content-type esplicito, richiesto da
         // backend/storage.rules (solo immagini) e utile al client email che
         // riceve l'allegato.
-        if (originalPath != null) {
-            val originalType = context.contentResolver.getType(sourceUri) ?: "image/jpeg"
-            storage.getReference(originalPath)
-                .putBytes(originalBytes, storageMetadata { contentType = originalType })
-                .await()
-        }
+        // Versione precedente (v1.12.0 — 2026-09-29), sostituita il 2026-09-29 — Firebase Storage:
+        // if (originalPath != null) {
+        //     storage.getReference(originalPath).putBytes(originalBytes, storageMetadata { contentType = originalType }).await()
+        // }
+        // val displayBytes = withContext(Dispatchers.Default) { compress(originalBytes) }
+        // storage.getReference(displayPath).putBytes(displayBytes, storageMetadata { contentType = "image/jpeg" }).await()
+        val originalType = context.contentResolver.getType(sourceUri)
+            ?.takeIf { it.startsWith("image/") } ?: "image/jpeg"
 
         // Copia "display": ridimensionata sul lato lungo e ricompressa in JPEG,
-        // target ~300-500 KB (vedi tabella limiti Firebase Storage in context.md).
+        // target ~300-500 KB (vedi tabella limiti storage in context.md).
         val displayBytes = withContext(Dispatchers.Default) { compress(originalBytes) }
-        storage.getReference(displayPath)
-            .putBytes(displayBytes, storageMetadata { contentType = "image/jpeg" })
-            .await()
+
+        // Un solo giro verso il backend per gli URL di entrambe le copie.
+        val teamId = displayPath.split('/').getOrNull(1) ?: error("Percorso foto non valido: $displayPath")
+        val uploads = buildList {
+            if (originalPath != null) add(BackendClient.PhotoUpload(originalPath, originalType))
+            add(BackendClient.PhotoUpload(displayPath, "image/jpeg"))
+        }
+        val urls = backendClient.photoUploadUrls(teamId, uploads)
+
+        if (originalPath != null) {
+            put(urls.getValue(originalPath), originalBytes, originalType)
+        }
+        put(urls.getValue(displayPath), displayBytes, "image/jpeg")
 
         return UploadResult(photoId, displayPath, originalPath)
+    }
+
+    /**
+     * PUT sull'URL firmato. Il Content-Type deve essere IDENTICO a quello
+     * dichiarato al backend: fa parte della firma (vedi objectStore.presignPut).
+     */
+    private suspend fun put(url: String, bytes: ByteArray, contentType: String) = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url(url)
+            .put(bytes.toRequestBody(contentType.toMediaType()))
+            .build()
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("Caricamento foto non riuscito (HTTP ${response.code})")
+        }
     }
 
     private fun readBytes(uri: Uri): ByteArray =

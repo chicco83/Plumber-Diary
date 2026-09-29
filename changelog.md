@@ -162,3 +162,17 @@ Minori:
 - Documentazione: `context.md`, `manual.md`, `SETUP.md`, `backend/README.md`.
 
 Decisioni aperte: Firebase Storage e piano Blaze; licenza AGPL di iText.
+
+## 1.13.0 — 2026-09-29
+**Foto su Backblaze B2 invece di Firebase Storage** (decisione dell'utente dopo la review: da fine 2024 Firebase Storage richiede il piano Blaze, con carta, nei progetti nuovi).
+- Storage a oggetti **compatibile S3**, servizio consigliato **Backblaze B2** (10 GB gratuiti, nessuna carta, limiti di spesa impostabili a zero). Il codice usa solo l'API S3 standard: per cambiare servizio (R2, Wasabi, MinIO…) bastano le variabili `S3_*` su Vercel.
+- Bucket **privato**: l'app non ha credenziali e riceve dal backend URL firmati a scadenza:
+  - `photo-upload-urls` (15 minuti): solo membri della squadra, solo sulle proprie soste o su clienti esistenti, solo immagini (il Content-Type fa parte della firma);
+  - `photo-view-urls` (1 ora): solo le copie display, mai gli originali HD.
+  Sostituiscono le `storage.rules`, rimosse insieme alla sezione `storage` di `firebase.json`. Il limite di 25 MB, non imponibile su un URL PUT firmato, lo applica il cleanup.
+- App: `PhotoUploader` carica con un PUT HTTP diretto sugli URL firmati (firma di `upload()` invariata, schermate non toccate); `PhotoGrid` tiene gli URL in memoria ~50 minuti e usa la chiave dell'oggetto come chiave della cache di Coil, così le miniature non si riscaricano; rimossa la dipendenza `firebase-storage-ktx`.
+- Backend: `send-recap-email` e `cleanup` leggono, firmano e cancellano sullo storage S3 (`_lib/objectStore.js`, `_lib/photoKeys.js`); nuove dipendenze `@aws-sdk/client-s3` e `@aws-sdk/s3-request-presigner`; rimossa `FIREBASE_STORAGE_BUCKET`.
+- Chiavi degli oggetti invariate rispetto ai vecchi percorsi Storage.
+- `SETUP.md`: nuovo passo 1-bis (account B2, bucket privato, regola obbligatoria "Keep only the last version", limiti di spesa a zero, chiave limitata al bucket).
+- Decisioni dell'utente registrate in `context.md`: licenza iText lasciata così; quote email invariate (nessun effetto sulle prestazioni).
+- Verificati la sintassi di tutti gli endpoint e la generazione degli URL firmati (con credenziali fittizie, senza un bucket reale). App non compilata (manca l'SDK Android).

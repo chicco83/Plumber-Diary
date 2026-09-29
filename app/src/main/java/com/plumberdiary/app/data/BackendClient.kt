@@ -1,4 +1,4 @@
-// BackendClient.kt — v1.12.0 — 2026-09-29 (v1.7.0 — 2026-09-23: sendRecapEmail, sendMandatino; v1.0.0 — 2026-09-20 00:30 UTC)
+// BackendClient.kt — v1.13.0 — 2026-09-29 (v1.12.0 — 2026-09-29; v1.7.0 — 2026-09-23: sendRecapEmail, sendMandatino; v1.0.0 — 2026-09-20 00:30 UTC)
 package com.plumberdiary.app.data
 
 import com.plumberdiary.app.auth.AuthRepository
@@ -117,6 +117,32 @@ class BackendClient(
                 .put("periodLabel", periodLabel)
                 .put("pdfBase64", pdfBase64),
         )
+    }
+
+    // --- Foto (v1.13.0 — 2026-09-29): storage a oggetti S3 al posto di Firebase Storage ---
+
+    data class PhotoUpload(val key: String, val contentType: String)
+
+    /** URL firmati (15 minuti) per caricare le foto indicate; mappa chiave → URL. */
+    suspend fun photoUploadUrls(teamId: String, uploads: List<PhotoUpload>): Map<String, String> {
+        val array = org.json.JSONArray()
+        uploads.forEach { array.put(JSONObject().put("key", it.key).put("contentType", it.contentType)) }
+        val response = post("photo-upload-urls", JSONObject().put("teamId", teamId).put("uploads", array))
+        val urls = response.getJSONArray("urls")
+        return (0 until urls.length()).associate { i ->
+            val o = urls.getJSONObject(i)
+            o.getString("key") to o.getString("url")
+        }
+    }
+
+    /** URL firmati (1 ora) per vedere le copie "display"; chiavi non valide omesse. */
+    suspend fun photoViewUrls(teamId: String, keys: List<String>): Map<String, String> {
+        val response = post(
+            "photo-view-urls",
+            JSONObject().put("teamId", teamId).put("keys", org.json.JSONArray(keys)),
+        )
+        val urls = response.optJSONObject("urls") ?: return emptyMap()
+        return urls.keys().asSequence().associateWith { urls.getString(it) }
     }
 
     private suspend fun post(path: String, body: JSONObject): JSONObject = withContext(Dispatchers.IO) {

@@ -1,6 +1,6 @@
 # SETUP — Plumber Diary (configurazioni manuali)
 
-Versione: 1.12.0 — 2026-09-29 11:38 UTC (v1.11.0 / v1.10.0 / v1.9.0 / v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-24)
+Versione: 1.13.0 — 2026-09-29 (v1.12.0 — 2026-09-29 11:38 UTC; v1.11.0 / v1.10.0 / v1.9.0 / v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-24)
 
 Tutto quello che va fatto **fuori dal codice** per portare l'app in piedi: progetto
 Firebase, regole di sicurezza, deploy Vercel del backend e primo build Android.
@@ -20,7 +20,8 @@ dipende quasi solo dai tempi di creazione dei progetti.
 | Android Studio (con SDK 35) | build e run dell'app | developer.android.com/studio |
 | JDK 17 | Gradle del progetto (`app/build.gradle.kts`) | incluso in Android Studio |
 | Node.js 18+ | firebase CLI (solo per il deploy delle regole) | nodejs.org |
-| Account Google + account Firebase | piano Spark, gratuito, nessuna carta — ⚠️ per Firebase Storage nei progetti nuovi Google chiede il piano Blaze (decisione aperta, vedi `context.md`) | console.firebase.google.com |
+| Account Google + account Firebase | piano Spark, gratuito, nessuna carta (Firebase Storage NON si usa: dalla 1.13.0 le foto sono su Backblaze B2) | console.firebase.google.com |
+| Account Backblaze B2 | foto (10 GB gratuiti, nessuna carta), vedi passo 1-bis | backblaze.com/b2 |
 | Account Vercel | piano Hobby, gratuito, nessuna carta | vercel.com |
 | `firebase-tools` installato | `npm install -g firebase-tools` | — |
 
@@ -35,7 +36,9 @@ dipende quasi solo dai tempi di creazione dei progetti.
      *Support email* metti la tua email (compare nel dialog di Google Sign-In).
    - **Firestore Database** → *Create database* → **Production mode** →
      posizione a piacere. Non pubblicare ancora le regole: lo fai al passo 2.
-   - **Storage** → *Get started* → **Production mode**.
+   - ~~**Storage** → *Get started* → **Production mode**.~~ Non più necessario dalla
+     1.13.0 (2026-09-29): le foto vanno su Backblaze B2, vedi passo 1-bis. Firebase
+     Storage nei progetti nuovi richiede il piano Blaze.
    - **Messaging**: non serve abilitarlo manualmente in questa fase (FCM è
      attivo di default nel progetto; le push "recap pronto" sono un prossimo step,
      oggi l'app funziona senza).
@@ -59,6 +62,36 @@ dipende quasi solo dai tempi di creazione dei progetti.
 > aggiornare l'impronta SHA-1 nella Console (altrimenti il login Google fallisce
 > con `invalid_request` / `auth/invalid-credential`).
 
+## Passo 1-bis — Backblaze B2 per le foto (v1.13.0)
+
+Le foto (copie "display" per l'app e originali HD per la mail di recap) stanno
+in un bucket **privato** compatibile S3. L'app non ha credenziali: il backend
+le rilascia come URL firmati a scadenza, dopo aver controllato la squadra.
+
+1. **Account**: backblaze.com → *Sign up* per **B2 Cloud Storage**. Il piano
+   gratuito (10 GB di spazio) non chiede la carta.
+2. **Bucket**: *Buckets* → *Create a Bucket*:
+   - nome univoco, es. `plumber-diary-foto-<qualcosa>`;
+   - **Files in Bucket: Private** (fondamentale);
+   - crittografia: a piacere (Server-Side Encryption attivabile senza costi).
+3. **Regola di ciclo di vita — OBBLIGATORIA**: sul bucket → *Lifecycle Settings*
+   → **Keep only the last version of the file**. B2 per default conserva
+   tutte le versioni: senza questa regola le foto cancellate dal cleanup
+   resterebbero come versioni nascoste e continuerebbero a occupare i 10 GB.
+4. **Limiti di spesa**: *Caps & Alerts* → imposta a **$0** i limiti giornalieri
+   di spazio, download e transazioni. Così, anche superando le soglie gratuite,
+   B2 blocca invece di addebitare (e senza carta non potrebbe comunque).
+5. **Chiave di accesso**: *Application Keys* → *Add a New Application Key*:
+   - accesso **solo a questo bucket**, *Read and Write*;
+   - copia subito **keyID** e **applicationKey** (la seconda non viene più mostrata).
+6. **Endpoint**: nella pagina del bucket, campo *Endpoint*, es.
+   `s3.eu-central-003.backblazeb2.com` → la regione è la parte centrale
+   (`eu-central-003`). Servono al passo 3.
+
+> Il codice usa solo l'API S3 standard: per passare in futuro a un altro
+> servizio compatibile (Cloudflare R2, Wasabi, MinIO…) basta cambiare le
+> variabili `S3_*` su Vercel, nessuna modifica all'app.
+
 ## Passo 2 — Regole e indici (firebase CLI)
 
 Dalla cartella `backend/`:
@@ -67,14 +100,16 @@ Dalla cartella `backend/`:
 cd backend
 firebase login                # una tantum, apre il browser
 firebase use <il-tuo-project-id>   # seleziona il progetto creato al passo 1
-firebase deploy               # pubblica firestore.rules + indexes + storage.rules
+firebase deploy               # pubblica firestore.rules + indexes (storage.rules rimosse nella 1.13.0)
 ```
 
 - `firestore.rules`: membership come criterio di accesso; la creazione di
   `teams/{teamId}/members/{uid}` è **vietata dal client** (solo l'endpoint
   `accept-invite` con Admin SDK può crearla) — non "correggere" questa regola.
-- `storage.rules` (nuovo in v1.7.0): foto clienti condivise, foto interventi
-  scrivibili solo dal proprietario della sosta.
+- ~~`storage.rules`~~ (rimosse nella 1.13.0, foto su Backblaze B2): le stesse
+  regole — foto clienti condivise, foto interventi scrivibili solo dal
+  proprietario della sosta, solo immagini — le applicano ora gli endpoint
+  `photo-upload-urls` e `photo-view-urls`; il limite di 25 MB lo applica il cleanup.
 - `firestore.indexes.json` (v1.12.0): **nessun indice composto** — le query
   dell'app usano range+orderBy sullo stesso campo, coperte dagli indici
   automatici. Prima il file dichiarava due indici a campo singolo come
@@ -103,7 +138,12 @@ firebase deploy               # pubblica firestore.rules + indexes + storage.rul
    | `FIREBASE_PROJECT_ID` | campo `project_id` della chiave |
    | `FIREBASE_CLIENT_EMAIL` | campo `client_email` |
    | `FIREBASE_PRIVATE_KEY` | campo `private_key` — **conserva gli `\n` letterali** (Vercel non accetta a capo reali; il codice in `_lib/firebase-admin.js` li ricodifica) |
-   | `FIREBASE_STORAGE_BUCKET` | campo `storageBucket` (nei progetti creati dopo ottobre 2024 è `<project-id>.firebasestorage.app`; nei vecchi `<project-id>.appspot.com`) |
+   | ~~`FIREBASE_STORAGE_BUCKET`~~ | non più usata dalla 1.13.0 (foto su B2) |
+   | `S3_ENDPOINT` | `https://` + endpoint del bucket B2 (passo 1-bis.6), es. `https://s3.eu-central-003.backblazeb2.com` |
+   | `S3_REGION` | es. `eu-central-003` |
+   | `S3_BUCKET` | nome del bucket B2 |
+   | `S3_ACCESS_KEY_ID` | *keyID* della Application Key B2 |
+   | `S3_SECRET_ACCESS_KEY` | *applicationKey* della Application Key B2 |
    | `SMTP_HOST` | es. `smtp.gmail.com` |
    | `SMTP_PORT` | `587` |
    | `SMTP_USER` | la tua email Gmail completa |
@@ -200,9 +240,9 @@ Actions**:
 | `CLEANUP_TOKEN` | lo stesso valore impostato come `CLEANUP_TOKEN` su Vercel |
 
 Senza questi secret il cron fallisce silenziosamente: le foto "original" HD non
-vengono cancellate dopo l'invio del recap e, col tempo, occupano lo storage
-gratuito (5 GB). È l'unico step "non visibile": nessun errore in app, si nota solo
-controllando la Console Storage.
+vengono cancellate dopo 7 giorni e, col tempo, occupano lo spazio gratuito di
+Backblaze B2 (10 GB). È l'unico step "non visibile": nessun errore in app, si nota
+solo controllando lo spazio usato dal bucket nella console B2.
 
 ## Troubleshooting rapido
 
@@ -211,10 +251,11 @@ controllando la Console Storage.
 | Login Google: `auth/invalid-credential` / crash su `default_web_client_id` | `google-services.json` mancante, in `app/` sbagliata posizione, o SHA-1 errata | ripeti passo 1.3–1.4; rigenera l'impronta dopo ogni cambio keystore |
 | Login ok ma "Crea squadra" dà errore HTTP 401/500 | env var Vercel mancanti/errate (soprattutto `FIREBASE_PRIVATE_KEY` senza gli `\n`) | verifica passo 3.2; i log sono in Vercel → *Deployments* → ultimo deploy → tab *Functions* |
 | Le funzioni rispondono ma le scritture Firestore falliscono | regole non pubblicate o progetto Firebase diverso da quello di `google-services.json` | `firebase deploy` nel progetto corretto (passo 2) |
-| Foto caricate ma miniature vuote in Dettaglio/Cliente | `storage.rules` non pubblicate (lettura negata) | passo 2: `firebase deploy` include ora anche le regole Storage |
+| Foto caricate ma miniature vuote in Dettaglio/Cliente | variabili `S3_*` errate su Vercel, o bucket/chiave B2 sbagliati | passo 1-bis e 3.2; i log sono in Vercel → *Functions* (`photo-view-urls`) |
 | Mappa Squadra grigia/vuota | tile server OSM lento al primo avvio, o init osmdroid mancante | attendi/zooma; l'init è già in `PlumberDiaryApp.onCreate` — non rimuoverlo |
 | Notifica "Sei da…" non arriva mai | permesso notifiche negato (Android 13+), soglia non superata, posizione su sede/pausa, nessun cliente noto in quel punto, oppure già notificata per quella sosta (parte una volta sola) | concedi le notifiche dalla Home; controlla Opzioni (soglia, sede, pause) |
-| Upload foto rifiutato | `storage.rules` non pubblicate, o file non immagine / oltre 25 MB | passo 2: `firebase deploy` |
+| Upload foto rifiutato ("Caricamento foto non riuscito") | chiave B2 senza permesso di scrittura sul bucket, variabili `S3_*` errate, o file non immagine | passo 1-bis.5 e 3.2 |
+| Spazio B2 che cresce anche dopo il cleanup | manca la regola "Keep only the last version" | passo 1-bis.3 |
 | Recap email: "Invio recap fallito" | SMTP non configurato o App Password scaduta | passo 3.2; le App Password Gmail si rigenerano in *Password app* |
 | "Unisciti": codice invito non valido | incollato solo un pezzo del codice | il codice completo ha la forma `squadra.codice`: usa *Copia* in Squadra/Opzioni |
 | "Le tue squadre" non compare dopo il login | indice `members.uid` (collection group) non pubblicato | passo 2: `firebase deploy` |

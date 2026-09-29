@@ -1,4 +1,4 @@
-// api/cleanup.js — v1.12.0 — 2026-09-29 (v1.0.0 — 2026-09-20 00:10 UTC)
+// api/cleanup.js — v1.13.0 — 2026-09-29 (v1.12.0 — 2026-09-29; v1.0.0 — 2026-09-20 00:10 UTC)
 //
 // Pulizia programmata, chiamata una volta al giorno da un workflow GitHub
 // Actions (vedi .github/workflows/cleanup-cron.yml) invece che da un Cron
@@ -23,13 +23,21 @@
 //  - i metadati dei file arrivano già da getFiles(): niente più una chiamata
 //    getMetadata() per ogni file (lenta con molte foto, rischio timeout 30 s).
 //
+// v1.13.0 — 2026-09-29: foto sullo storage a oggetti S3 (_lib/objectStore.js)
+// invece che su Firebase Storage. In più cancella gli oggetti oltre 25 MB:
+// con un URL PUT firmato la dimensione non si può limitare all'upload (prima
+// lo faceva storage.rules), quindi il controllo avviene qui, a posteriori.
+//
 // Protetto da un token statico (stesso pattern di ha-status/cleanup nel
 // progetto gemello): questo endpoint non richiede un utente Firebase, è
 // chiamato da un job automatico, non da un dispositivo.
 
-const { db, storage } = require('./_lib/firebase-admin');
+// Prima (v1.12.0): const { db, storage } = require('./_lib/firebase-admin');
+const { db } = require('./_lib/firebase-admin');
+const objectStore = require('./_lib/objectStore');
 
 const PHOTO_GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000; // 7 giorni oltre l'upload
+const MAX_PHOTO_BYTES = 25 * 1024 * 1024; // come il vecchio limite di storage.rules
 
 module.exports = async (req, res) => {
   const token = req.headers['x-cleanup-token'];
@@ -61,9 +69,9 @@ module.exports = async (req, res) => {
       // cancellava solo il documento, le foto della sosta restavano su Storage.
       // for (const stopDoc of oldStopsSnap.docs) { await stopDoc.ref.delete(); stopsDeleted += 1; }
       for (const stopDoc of oldStopsSnap.docs) {
-        await storage
-          .bucket()
-          .deleteFiles({ prefix: `teams/${teamDoc.id}/members/${memberDoc.id}/stops/${stopDoc.id}/` })
+        // Prima (v1.12.0): await storage.bucket().deleteFiles({ prefix: ... }).catch(() => {});
+        await objectStore
+          .deletePrefix(`teams/${teamDoc.id}/members/${memberDoc.id}/stops/${stopDoc.id}/`)
           .catch(() => {});
         await stopDoc.ref.delete();
         stopsDeleted += 1;
@@ -84,17 +92,20 @@ module.exports = async (req, res) => {
   // .../photos/*/original.jpg più vecchio del periodo di grazia viene
   // rimosso, indipendentemente dall'esito dell'invio email (non deve mai
   // accumularsi indefinitamente, vedi context.md).
-  const [files] = await storage.bucket().getFiles({ prefix: 'teams/' });
-  for (const file of files) {
-    if (!file.name.endsWith('/original.jpg')) continue;
-    // Versione precedente (v1.0.0 — 2026-09-20), sostituita il 2026-09-29:
-    // const [metadata] = await file.getMetadata();
-    const createdAt = new Date(file.metadata.timeCreated).getTime();
-    if (now - createdAt > PHOTO_GRACE_PERIOD_MS) {
-      await file.delete().catch(() => {});
-      photosDeleted += 1;
-    }
-  }
+  // Versione precedente (v1.12.0 — 2026-09-29), sostituita il 2026-09-29 — Firebase Storage:
+  // const [files] = await storage.bucket().getFiles({ prefix: 'teams/' });
+  // for (const file of files) {
+  //   if (!file.name.endsWith('/original.jpg')) continue;
+  //   const createdAt = new Date(file.metadata.timeCreated).getTime();
+  //   if (now - createdAt > PHOTO_GRACE_PERIOD_MS) { await file.delete().catch(() => {}); photosDeleted += 1; }
+  // }
+  const objects = await objectStore.list('teams/');
+  const expired = objects
+    .filter((o) =>
+      (o.key.endsWith('/original.jpg') && now - o.lastModified > PHOTO_GRACE_PERIOD_MS) ||
+      o.size > MAX_PHOTO_BYTES)
+    .map((o) => o.key);
+  photosDeleted = await objectStore.deleteKeys(expired).catch(() => 0);
 
   const quotaSnap = await db.collection('quota').where('expiresAt', '<', now).get();
   for (const doc of quotaSnap.docs) {

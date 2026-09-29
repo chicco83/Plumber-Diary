@@ -1,4 +1,4 @@
-// api/send-recap-email.js — v1.12.0 — 2026-09-29 (v1.0.0 — 2026-09-20 00:10 UTC)
+// api/send-recap-email.js — v1.13.0 — 2026-09-29 (v1.12.0 — 2026-09-29; v1.0.0 — 2026-09-20 00:10 UTC)
 //
 // Requisito 6/12: invia il recap giornaliero all'indirizzo amministrazione
 // impostato nelle Opzioni (default ON), con le foto degli interventi in
@@ -21,8 +21,14 @@
 //    un secondo invio ("Invia recap via email") arrivava senza foto HD. Le
 //    cancella cleanup.js dopo il periodo di grazia (7 giorni);
 //  - testi dell'utente "escaped" nell'HTML; quota 20 invii/giorno.
+//
+// v1.13.0 — 2026-09-29: le foto HD si leggono dallo storage a oggetti S3
+// (_lib/objectStore.js) invece che da Firebase Storage; i link firmati per
+// le mail troppo pesanti sono URL S3 firmati (stessa durata, 5 giorni).
 
-const { db, storage } = require('./_lib/firebase-admin');
+// Prima (v1.12.0): const { db, storage } = require('./_lib/firebase-admin');
+const { db } = require('./_lib/firebase-admin');
+const objectStore = require('./_lib/objectStore');
 const { requireAuthenticatedUser } = require('./_lib/auth');
 const { sendMail } = require('./_lib/mailer');
 const { checkAndIncrementQuota } = require('./_lib/quota');
@@ -72,22 +78,18 @@ module.exports = async (req, res) => {
     const clientNames = {};
     clientsSnap.docs.forEach((d) => { clientNames[d.id] = d.data().name || ''; });
 
-    const bucket = storage.bucket();
-    const photoFiles = []; // { stop, photoId, file, sizeBytes, ext }
+    // Versione precedente (v1.12.0 — 2026-09-29), sostituita il 2026-09-29 — Firebase Storage:
+    // const bucket = storage.bucket();
+    // const file = bucket.file(path); const [exists] = await file.exists(); if (!exists) continue;
+    // const [metadata] = await file.getMetadata();
+    // photoFiles.push({ stop, photoId, file, sizeBytes: Number(metadata.size || 0), ext: extensionFor(metadata.contentType) });
+    const photoFiles = []; // { stop, photoId, key, sizeBytes, ext }
     for (const stop of stops) {
       for (const photoId of stop.photoIds || []) {
-        const path = `teams/${teamId}/members/${user.uid}/stops/${stop.id}/photos/${photoId}/original.jpg`;
-        const file = bucket.file(path);
-        const [exists] = await file.exists();
-        if (!exists) continue;
-        const [metadata] = await file.getMetadata();
-        photoFiles.push({
-          stop,
-          photoId,
-          file,
-          sizeBytes: Number(metadata.size || 0),
-          ext: extensionFor(metadata.contentType),
-        });
+        const key = `teams/${teamId}/members/${user.uid}/stops/${stop.id}/photos/${photoId}/original.jpg`;
+        const meta = await objectStore.head(key);
+        if (!meta) continue; // originale già scaduto (oltre 7 giorni) o mai caricato
+        photoFiles.push({ stop, photoId, key, sizeBytes: meta.size, ext: extensionFor(meta.contentType) });
       }
     }
 
@@ -103,17 +105,16 @@ module.exports = async (req, res) => {
     if (useAttachments) {
       attachments = await Promise.all(
         photoFiles.map(async (p, i) => {
-          const [buffer] = await p.file.download();
+          // Prima: const [buffer] = await p.file.download();
+          const buffer = await objectStore.getBuffer(p.key);
           return { filename: fileName(p, i), content: buffer };
         }),
       );
     } else {
       const links = await Promise.all(
         photoFiles.map(async (p, i) => {
-          const [url] = await p.file.getSignedUrl({
-            action: 'read',
-            expires: Date.now() + SIGNED_URL_TTL_MS,
-          });
+          // Prima: const [url] = await p.file.getSignedUrl({ action: 'read', expires: Date.now() + SIGNED_URL_TTL_MS });
+          const url = await objectStore.presignGet(p.key, SIGNED_URL_TTL_MS / 1000);
           return `<li><a href="${escapeHtml(url)}">${escapeHtml(fileName(p, i))}</a></li>`;
         }),
       );

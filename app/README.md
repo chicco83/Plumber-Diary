@@ -18,7 +18,8 @@ Firebase, esattamente come nel progetto gemello `chicco83/gwatch-child-tracker`
    (non incluso in questo repo: contiene identificatori del progetto).
 3. **Abilitare** in Console: Authentication (provider Google), Firestore
    Database (modalità produzione, poi caricare `backend/firestore.rules`),
-   Cloud Storage (per le foto), Cloud Messaging (per le push).
+   Cloud Messaging (per le push). Le foto NON usano Cloud Storage dalla
+   v1.13.0 (2026-09-29): vanno su Backblaze B2, vedi `SETUP.md` passo 1-bis.
 4. **Icone launcher**: generare `mipmap-*/ic_launcher.png` (Image Asset
    Studio in Android Studio) — non incluse in questo scaffolding.
 5. Vedi `backend/README.md` per il setup delle Vercel Functions/GitHub

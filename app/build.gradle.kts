@@ -1,10 +1,11 @@
-// app/build.gradle.kts — v1.12.0 — 2026-09-29 (v1.7.0 — 2026-09-24: google-services condizionale, coil, icone estese; v1.0.0 — 2026-09-20 00:10 UTC)
+// app/build.gradle.kts — v1.13.0 — 2026-09-29 (v1.12.0 — 2026-09-29; v1.7.0 — 2026-09-24: google-services condizionale, coil, icone estese; v1.0.0 — 2026-09-20 00:10 UTC)
 //
 // Modulo Android dell'app Plumber Diary. Scelte principali (vedi context.md
 // per il ragionamento completo):
 // - Jetpack Compose per la UI (Home, Recap, Dettaglio, Cliente, Squadra,
 //   Opzioni, Storico, Dashboard, Mandatino).
-// - Firebase (Auth, Firestore, Storage, Messaging) come backend dati/foto/push,
+// - Firebase (Auth, Firestore, Messaging) come backend dati/push — dalla v1.13.0
+//   le foto sono su uno storage S3 (Backblaze B2), non su Firebase Storage —
 //   piano Spark gratuito — stesso stack già validato in produzione nel
 //   progetto gemello chicco83/gwatch-child-tracker.
 // - osmdroid al posto di Google Maps SDK: nessuna chiave API, nessuna
@@ -87,7 +88,9 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.4.0"))
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
-    implementation("com.google.firebase:firebase-storage-ktx")
+    // v1.13.0 — 2026-09-29: foto su storage S3 (Backblaze B2) tramite URL firmati dal
+    // backend, non più Firebase Storage (richiede Blaze nei progetti nuovi). Prima:
+    // implementation("com.google.firebase:firebase-storage-ktx")
     implementation("com.google.firebase:firebase-messaging-ktx")
     implementation("com.google.android.gms:play-services-auth:21.2.0")
 

@@ -1,4 +1,4 @@
-// FirestorePaths.kt — v1.0.0 — 2026-09-20 00:10 UTC
+// FirestorePaths.kt — v1.13.0 — 2026-09-29 (v1.0.0 — 2026-09-20 00:10 UTC)
 package com.plumberdiary.app.data
 
 /**
@@ -27,7 +27,13 @@ object FirestorePaths {
     fun articles(teamId: String) = "${team(teamId)}/articles"
     fun invites(teamId: String) = "${team(teamId)}/invites"
 
-    /** Storage: vedi context.md per la doppia risoluzione original/display. */
+    // Prima (v1.0.0): /** Storage: vedi context.md per la doppia risoluzione original/display. */
+    /**
+     * Chiavi delle foto nello storage a oggetti S3 (v1.13.0 — 2026-09-29, prima
+     * percorsi Firebase Storage, stesso formato). Devono coincidere con i
+     * pattern accettati da backend/api/_lib/photoKeys.js. Vedi context.md per
+     * la doppia risoluzione original/display.
+     */
     fun clientPhotoDisplay(teamId: String, clientId: String, photoId: String) =
         "teams/$teamId/clients/$clientId/photos/$photoId/display.jpg"
 
