@@ -1,4 +1,4 @@
-// ClienteScreen.kt — v1.9.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-23)
+// ClienteScreen.kt — v1.10.0 — 2026-09-29 (v1.9.0 / v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-23)
 //
 // Versione precedente (v1.0.0 — 2026-09-20 00:10 UTC): stub con solo il titolo,
 // sostituita il 2026-09-23 dalla scheda completa (requisiti 8/9/10/11):
@@ -50,6 +50,8 @@ import com.plumberdiary.app.data.FirestorePaths
 import com.plumberdiary.app.data.model.Article
 import com.plumberdiary.app.data.model.ClientRecord
 import com.plumberdiary.app.data.model.Stop
+import com.plumberdiary.app.data.model.StopKind
+import com.plumberdiary.app.location.ClientMatcher
 import com.plumberdiary.app.data.repository.ArticleRepository
 import com.plumberdiary.app.data.repository.ClientRepository
 import com.plumberdiary.app.data.repository.StopRepository
@@ -81,7 +83,8 @@ fun ClienteScreen(navController: NavHostController, clientId: String) {
 
     // Stato del flusso mandatino (requisito 9: mai invio automatico).
     var showMandatinoConfirm by remember { mutableStateOf(false) }
-    var mandatinoPeriod by remember { mutableStateOf("Questo mese") }
+    // v1.10.0 — 2026-09-29: "Oggi" è il caso tipico (mandatino firmato sul posto a fine intervento).
+    var mandatinoPeriod by remember { mutableStateOf("Oggi") }
     var mandatinoRecipient by remember { mutableStateOf("") }
     var mandatinoStops by remember { mutableStateOf<List<Stop>>(emptyList()) }
     var mandatinoSending by remember { mutableStateOf(false) }
@@ -90,6 +93,8 @@ fun ClienteScreen(navController: NavHostController, clientId: String) {
     var mandatinoIncludeTeam by remember { mutableStateOf(false) }
     var mandatinoTechnicians by remember { mutableStateOf<Map<String, String>>(emptyMap()) } // stopId -> tecnico
     var mandatinoLoading by remember { mutableStateOf(false) }
+    var mandatinoMatchedByPosition by remember { mutableStateOf(0) } // soste senza cliente incluse per posizione
+    var mandatinoInProgress by remember { mutableStateOf(0) }        // soste ancora aperte, conteggiate fino ad ora
 
     val clientRepository = remember { ClientRepository() }
     val articleRepository = remember { ArticleRepository() }
@@ -152,44 +157,97 @@ fun ClienteScreen(navController: NavHostController, clientId: String) {
     //     showMandatinoConfirm = true
     // }
 
+    // Versione precedente (v1.9.0 — 2026-09-29), sostituita lo stesso giorno
+    // dopo il chiarimento dell'utente: il mandatino si compila SUL POSTO a fine
+    // intervento ed è l'accettazione dell'addebito da parte del cliente, quindi
+    // non può dipendere dal recap che i tecnici completano la sera a casa.
+    // Difetti della versione precedente in questo scenario:
+    //  - dei colleghi includeva solo i giorni già confermati nel recap
+    //    (.filter { member.uid == s.uid || it.confirmedInRecap });
+    //  - escludeva le soste ancora aperte (endedAt > 0L), cioè proprio
+    //    l'intervento in corso da far firmare;
+    //  - includeva solo le soste già associate al cliente (clientId), mentre
+    //    sul posto un collega di solito non l'ha ancora fatto.
+    //
+    // suspend fun loadMandatinoStops(c: ClientRecord, includeTeam: Boolean) {
+    //     ...
+    //     fun List<Stop>.forClient() = filter { it.clientId == c.id && it.endedAt > 0L }
+    //     ...
+    //     val stops = stopRepository.getStopsForDay(s.teamId, member.uid, fromMillis, now).forClient()
+    //         .filter { member.uid == s.uid || it.confirmedInRecap }
+    // }
+
     /**
-     * Carica gli interventi del periodo presso il cliente. Con [includeTeam]
-     * legge anche le soste dei colleghi (le regole Firestore lo consentono ai
-     * membri della squadra), ma solo i giorni che ciascun collega ha già
-     * confermato nel proprio recap: orari e note non ancora rivisti non
-     * finiscono in un documento per il cliente. Le proprie soste sono incluse
-     * anche se non confermate, come prima.
+     * Carica gli interventi del periodo presso il cliente, indipendentemente
+     * dal recap serale (non ancora compilato quando il mandatino si fa sul
+     * posto). Una sosta è inclusa se:
+     *  - è associata a questo cliente, oppure
+     *  - non ha ancora un cliente (né è sede/pausa) ma si trova in una posizione
+     *    nota di questo cliente: è il caso del collega che associa il cliente
+     *    solo la sera. Queste sono contate a parte e mostrate prima dell'invio.
+     * Le soste ancora aperte sono conteggiate fino ad ora (fino all'ultimo fix
+     * se il tracciamento risulta fermo da oltre 30 minuti).
+     * Con [includeTeam] vale lo stesso per tutti i membri della squadra (le
+     * regole Firestore consentono la lettura delle soste ai membri).
      */
     suspend fun loadMandatinoStops(c: ClientRecord, includeTeam: Boolean) {
         val s = session ?: return
         val cal = Calendar.getInstance()
-        val fromMillis = if (mandatinoPeriod == "Questo mese") {
-            cal.set(Calendar.DAY_OF_MONTH, 1); cal.set(Calendar.HOUR_OF_DAY, 0)
-            cal.set(Calendar.MINUTE, 0); cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
-            cal.timeInMillis
-        } else {
-            System.currentTimeMillis() - 30L * 24 * 3_600_000
+        val fromMillis = when (mandatinoPeriod) {
+            "Oggi" -> {
+                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
+                cal.timeInMillis
+            }
+            "Questo mese" -> {
+                cal.set(Calendar.DAY_OF_MONTH, 1); cal.set(Calendar.HOUR_OF_DAY, 0)
+                cal.set(Calendar.MINUTE, 0); cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
+                cal.timeInMillis
+            }
+            else -> System.currentTimeMillis() - 30L * 24 * 3_600_000
         }
         val now = System.currentTimeMillis()
-        fun List<Stop>.forClient() = filter { it.clientId == c.id && it.endedAt > 0L }
+        val staleMillis = 30L * 60_000
 
-        if (!includeTeam) {
-            mandatinoStops = stopRepository.getStopsForDay(s.teamId, s.uid, fromMillis, now).forClient().sortedBy { it.startedAt }
-            mandatinoTechnicians = emptyMap()
-            return
-        }
+        var byPosition = 0
+        var inProgress = 0
+
+        /** Soste del membro presso questo cliente, con fine "effettiva" per quelle aperte. */
+        suspend fun stopsAtClient(uid: String): List<Stop> =
+            stopRepository.getStopsForDay(s.teamId, uid, fromMillis, now).mapNotNull { stop ->
+                val associated = stop.clientId == c.id
+                val unassignedHere = stop.clientId == null &&
+                    stop.kind != StopKind.DEPOT && stop.kind != StopKind.BREAK &&
+                    ClientMatcher.findSuggestedClient(stop.lat, stop.lon, listOf(c)) != null
+                if (!associated && !unassignedHere) return@mapNotNull null
+                if (unassignedHere) byPosition++
+                if (stop.endedAt > 0L) {
+                    stop
+                } else {
+                    inProgress++
+                    val lastSeen = if (stop.lastFixAt > 0L) stop.lastFixAt else stop.startedAt
+                    // Solo per il documento: nessuna scrittura su Firestore.
+                    stop.copy(endedAt = if (now - lastSeen <= staleMillis) now else lastSeen)
+                }
+            }
 
         val technicians = mutableMapOf<String, String>()
         val collected = mutableListOf<Stop>()
-        for (member in TeamRepository().getMembers(s.teamId)) {
-            val name = member.displayName.ifBlank { member.email.ifBlank { "Tecnico" } }
-            val stops = stopRepository.getStopsForDay(s.teamId, member.uid, fromMillis, now).forClient()
-                .filter { member.uid == s.uid || it.confirmedInRecap }
-            stops.forEach { technicians[it.id] = name }
-            collected += stops
+        if (includeTeam) {
+            for (member in TeamRepository().getMembers(s.teamId)) {
+                val name = member.displayName.ifBlank { member.email.ifBlank { "Tecnico" } }
+                val stops = stopsAtClient(member.uid)
+                stops.forEach { technicians[it.id] = name }
+                collected += stops
+            }
+        } else {
+            collected += stopsAtClient(s.uid)
         }
+
         mandatinoStops = collected.sortedBy { it.startedAt }
-        mandatinoTechnicians = technicians
+        mandatinoTechnicians = if (includeTeam) technicians else emptyMap()
+        mandatinoMatchedByPosition = byPosition
+        mandatinoInProgress = inProgress
     }
 
     fun prepareMandatino() {
@@ -253,11 +311,14 @@ fun ClienteScreen(navController: NavHostController, clientId: String) {
             ElevatedCard(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                 Column(Modifier.padding(12.dp)) {
                     Text("Mandatino delle ore", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
-                    Text("PDF di riepilogo ore/materiali, inviato SOLO dopo conferma esplicita (requisito 9).")
+                    Text("Riepilogo delle ore da far accettare al cliente, di norma sul posto a fine intervento. Inviato SOLO dopo conferma esplicita (requisito 9).")
+                    // v1.10.0 — 2026-09-29: aggiunto "Oggi", il caso tipico.
                     Row {
-                        OutlinedButton(onClick = { mandatinoPeriod = "Questo mese"; prepareMandatino() }) { Text("Questo mese") }
+                        Button(onClick = { mandatinoPeriod = "Oggi"; prepareMandatino() }) { Text("Oggi") }
                         Spacer(Modifier.height(8.dp))
-                        OutlinedButton(onClick = { mandatinoPeriod = "Ultimi 30 giorni"; prepareMandatino() }) { Text("Ultimi 30 gg") }
+                        OutlinedButton(onClick = { mandatinoPeriod = "Questo mese"; prepareMandatino() }) { Text("Mese") }
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(onClick = { mandatinoPeriod = "Ultimi 30 giorni"; prepareMandatino() }) { Text("30 gg") }
                     }
                 }
             }
@@ -328,7 +389,8 @@ fun ClienteScreen(navController: NavHostController, clientId: String) {
                                 }
                             },
                         )
-                        Text("Includi le ore dei colleghi (solo giorni già confermati)")
+                        // v1.10.0 — 2026-09-29: non più limitato ai recap confermati.
+                        Text("Includi le ore dei colleghi presso questo cliente")
                     }
                     Text(
                         if (mandatinoLoading) "Caricamento interventi..."
@@ -338,6 +400,16 @@ fun ClienteScreen(navController: NavHostController, clientId: String) {
                         mandatinoStops.groupBy { mandatinoTechnicians[it.id] ?: "—" }.forEach { (name, list) ->
                             Text("  $name: ${list.size} interventi, ${Format.durationLabel(list.sumOf { Format.durationMinutes(it.startedAt, it.endedAt) })}")
                         }
+                    }
+                    // Trasparenza prima di far accettare l'addebito: cosa è stimato.
+                    if (!mandatinoLoading && mandatinoInProgress > 0) {
+                        Text("$mandatinoInProgress interventi ancora in corso, conteggiati fino ad ora.")
+                    }
+                    if (!mandatinoLoading && mandatinoMatchedByPosition > 0) {
+                        Text(
+                            "$mandatinoMatchedByPosition soste senza cliente incluse perché nella posizione di questo cliente: verifica che siano corrette.",
+                            color = androidx.compose.ui.graphics.Color(0xFFD97706),
+                        )
                     }
                     Text("Materiali: ${Format.euros(totalMaterials)}")
                     OutlinedTextField(
@@ -354,18 +426,21 @@ fun ClienteScreen(navController: NavHostController, clientId: String) {
                     mandatinoSending = true
                     scope.launch {
                         try {
+                            // v1.10.0 — 2026-09-29: nel documento "Oggi" diventa la data,
+                            // altrimenti riletto nei giorni successivi sarebbe ambiguo.
+                            val docPeriod = if (mandatinoPeriod == "Oggi") Format.date(System.currentTimeMillis()) else mandatinoPeriod
                             // v1.8.0 — 2026-09-29: generazione PDF fuori dal main thread.
                             val base64 = withContext(Dispatchers.IO) {
                                 val pdfFile = File(context.cacheDir, "mandatino-${cc.id}.pdf")
                                 java.io.FileOutputStream(pdfFile).use { out ->
                                     MandatinoPdfGenerator.generate(
-                                        out, cc, mandatinoStops, mandatinoPeriod,
+                                        out, cc, mandatinoStops, docPeriod,
                                         technicianByStopId = if (mandatinoIncludeTeam) mandatinoTechnicians else null,
                                     )
                                 }
                                 Base64.getEncoder().encodeToString(pdfFile.readBytes())
                             }
-                            backendClient.sendMandatino(s.teamId, cc.id, mandatinoRecipient.trim(), mandatinoPeriod, base64)
+                            backendClient.sendMandatino(s.teamId, cc.id, mandatinoRecipient.trim(), docPeriod, base64)
                             message = "Mandatino inviato a ${mandatinoRecipient.trim()}"
                         } catch (e: Exception) { message = "Invio mandatino fallito: ${e.message}" }
                         finally { mandatinoSending = false; showMandatinoConfirm = false }

@@ -116,3 +116,10 @@ Review completa della 1.7.0 e correzione di tutti i problemi trovati. **Non anco
 - **Mandatino con le ore dei colleghi**: nella finestra di conferma del mandatino c'è la casella "Includi le ore dei colleghi" (default OFF). Se attiva, vengono aggiunte le ore degli altri membri della squadra presso lo stesso cliente, limitate ai giorni che ciascun collega ha già confermato nel recap. Nella finestra compare il riepilogo per tecnico; il PDF (`MandatinoPdfGenerator`) aggiunge la colonna "Tecnico" e le ore totali per tecnico. Senza la casella il mandatino resta come prima.
 - **Autore dei commit di Qwen**: il commit della 1.7.0 riportava "Claude" come autore. Riscritta la storia del branch (push forzato, contenuti invariati) perché risulti `Qwen3.6-35B-A3B-UD-Q4_K_M <qwen@localhost>`; dettagli nella nota della voce 1.7.0.
 
+## 1.10.0 — 2026-09-29
+Correzione del mandatino dopo il chiarimento dell'utente: si compila **sul posto a fine intervento** ed è l'accettazione dell'addebito da parte del cliente, quindi non può dipendere dal recap serale.
+- Ore dei colleghi incluse **a prescindere dal recap**: nella 1.9.0 erano limitate ai giorni già confermati.
+- Le soste **ancora in corso** (proprie e dei colleghi) sono conteggiate fino ad ora, o fino all'ultimo fix se il tracciamento è fermo da oltre 30 minuti. Prima erano escluse, cioè proprio l'intervento da far firmare.
+- Incluse anche le soste **senza cliente associato** che si trovano in una posizione nota del cliente: sul posto il collega di solito non ha ancora associato il cliente. La finestra di conferma le conta e le segnala da verificare.
+- Periodo **"Oggi"** aggiunto e predefinito; nel PDF compare la data invece di "Oggi".
+

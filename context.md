@@ -1,6 +1,6 @@
 # Context — Plumber Diary
 
-Versione: 1.9.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-24 di Qwen; precedenti, vedi changelog.md)
+Versione: 1.10.0 — 2026-09-29 (v1.9.0 / v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-24 di Qwen; precedenti, vedi changelog.md)
 
 ## Obiettivo
 
@@ -108,7 +108,11 @@ Numeri di riferimento del piano Firebase **Spark** (gratuito, nessuna carta) e V
   - le opzioni modificate valgono per il tracciamento entro 10 minuti;
   - la mail di recap parte alla conferma del recap (vedi sopra);
   - i recap dei colleghi sono in sola lettura e mostrano solo i giorni che il collega ha confermato.
-- **Mandatino con le ore dei colleghi** (decisione del 2026-09-29): al momento della creazione una casella "Includi le ore dei colleghi" (default OFF) aggiunge le ore degli altri membri presso lo stesso cliente. Dei colleghi entrano solo i giorni già confermati nel loro recap, così nel documento per il cliente non finiscono orari e note non ancora rivisti. Il PDF aggiunge la colonna "Tecnico" e il riepilogo delle ore per tecnico.
+- **Natura del mandatino** (chiarimento dell'utente del 2026-09-29): si compila **sul posto a fine intervento** ed è l'**accettazione da parte del cliente dell'addebito** di un certo numero di ore. Quindi non dipende dal recap serale, che i tecnici completano dopo, a casa. Conseguenze nel codice:
+  - periodo predefinito "Oggi" (restano anche mese e ultimi 30 giorni); nel PDF compare la data;
+  - le soste ancora in corso sono conteggiate fino ad ora (o fino all'ultimo fix, se il tracciamento risulta fermo da oltre 30 minuti);
+  - sono incluse anche le soste non ancora associate a un cliente ma che si trovano in una posizione nota di questo cliente; prima dell'invio la finestra le segnala perché il tecnico le verifichi;
+  - casella "Includi le ore dei colleghi" (default OFF): aggiunge le ore degli altri membri presso lo stesso cliente con le stesse regole, **a prescindere dal loro recap**. Il PDF aggiunge la colonna "Tecnico" e il riepilogo delle ore per tecnico.
 - **Non ancora iniziati**:
   - integrazione reale con Google Calendar (oggi il promemoria è solo un testo salvato sulla sosta);
   - export CSV;
