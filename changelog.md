@@ -50,7 +50,7 @@ Prima stesura dell'architettura tecnica e dello scaffolding di codice (finora so
 - Registrato in `context.md` il rischio accettato: il piano Vercel Hobby è riservato a uso non commerciale e Plumber Diary rientra nell'uso commerciale; la via di migrazione prevista, se servisse, è Cloud Functions su Firebase Blaze.
 
 ## 1.7.0 — 2026-09-24 (scritta da Qwen, IA locale)
-> Nota aggiunta il 2026-09-29: questa versione è stata sviluppata da Qwen e pubblicata nel commit `3122a84` con autore "Claude"; in origine era etichettata anch'essa 1.6.0 e registrata senza titolo proprio dentro la voce precedente. Rinumerata qui (e nelle etichette del codice) per distinguerla. Molti punti elencati sotto sono stati corretti nella 1.8.0: il codice di questa versione non compilava.
+> Nota aggiunta il 2026-09-29: questa versione è stata sviluppata da Qwen (modello locale `Qwen3.6-35B-A3B-UD-Q4_K_M`). Era stata pubblicata con autore "Claude" nel commit `3122a84`; su richiesta dell'utente l'autore è stato corretto riscrivendo la storia del branch, e il commit ora è `38e8852`, con autore `Qwen3.6-35B-A3B-UD-Q4_K_M` e contenuto invariato. I messaggi dei commit successivi possono ancora citare il vecchio hash `3122a84`. In origine la versione era etichettata anch'essa 1.6.0 e registrata senza titolo proprio dentro la voce precedente: è stata rinumerata qui (e nelle etichette del codice) per distinguerla. Molti punti elencati sotto sono stati corretti nella 1.8.0: il codice di questa versione non compilava.
 
 Implementazione completa delle schermate (chiuso il punto "schermate ancora stub") e messa in piedi del setup manuale:
 - **Correzioni al foreground service** (`LocationTrackingService`): la sosta APERTA viene ora persistita su Firestore a ogni fix (prima esisteva solo in memoria e andava persa al kill del processo); classifica della kind (sede/pausa/da verificare) estratta in `classifyKind()`; il check della notifica in tempo reale salta anche le soste silenziate con "Non ora" (`Stop.realtimeDismissedAt`, nuovo campo).
@@ -114,5 +114,5 @@ Review completa della 1.7.0 e correzione di tutti i problemi trovati. **Non anco
 
 ## 1.9.0 — 2026-09-29
 - **Mandatino con le ore dei colleghi**: nella finestra di conferma del mandatino c'è la casella "Includi le ore dei colleghi" (default OFF). Se attiva, vengono aggiunte le ore degli altri membri della squadra presso lo stesso cliente, limitate ai giorni che ciascun collega ha già confermato nel recap. Nella finestra compare il riepilogo per tecnico; il PDF (`MandatinoPdfGenerator`) aggiunge la colonna "Tecnico" e le ore totali per tecnico. Senza la casella il mandatino resta come prima.
-- **Autore dei commit di Qwen**: vedi la nota nella voce 1.7.0.
+- **Autore dei commit di Qwen**: il commit della 1.7.0 riportava "Claude" come autore. Riscritta la storia del branch (push forzato, contenuti invariati) perché risulti `Qwen3.6-35B-A3B-UD-Q4_K_M <qwen@localhost>`; dettagli nella nota della voce 1.7.0.
 
