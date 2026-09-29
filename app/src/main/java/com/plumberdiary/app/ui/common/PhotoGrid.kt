@@ -1,4 +1,4 @@
-// PhotoGrid.kt — v1.6.0 — 2026-09-24
+// PhotoGrid.kt — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-24)
 //
 // Miniature delle foto caricate (copia "display" su Firebase Storage, vedi
 // PhotoUploader): prima di questa schermata le foto venivano caricate ma non
@@ -6,7 +6,9 @@
 // (requisito 12), qui si usano solo quelle compressa per app/sync.
 package com.plumberdiary.app.ui.common
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +24,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.google.firebase.storage.FirebaseStorage
+import kotlinx.coroutines.tasks.await
 
 /**
  * Mostra le miniature delle foto identificate da [photoIds]; per ogni id il
@@ -35,11 +38,17 @@ fun PhotoGrid(photoIds: List<String>, displayPathFor: (String) -> String) {
     LaunchedEffect(photoIds) {
         if (photoIds.isEmpty()) return@LaunchedEffect
         val storage = FirebaseStorage.getInstance()
+        // Versione precedente (v1.7.0 — 2026-09-24), corretta il 2026-09-29:
+        // downloadUrl è un Task, e toString() ne restituiva la descrizione
+        // testuale ("com.google.android.gms.tasks...@1a2b"), non l'URL: nessuna
+        // miniatura veniva mai mostrata.
+        //
+        // storage.getReference(displayPathFor(id)).downloadUrl.toString()
         urls = photoIds.associateWith { id ->
             try {
-                storage.getReference(displayPathFor(id)).downloadUrl.toString()
+                storage.getReference(displayPathFor(id)).downloadUrl.await().toString()
             } catch (_: Exception) {
-                "" // downloadUrl fallisce solo se il ref è malformato: si salta la foto
+                "" // foto non ancora caricata, cancellata o senza permesso: si salta
             }
         }
     }
@@ -47,7 +56,12 @@ fun PhotoGrid(photoIds: List<String>, displayPathFor: (String) -> String) {
     val map = urls ?: return
     if (map.values.none { it.isNotBlank() }) return
 
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    // v1.8.0 — 2026-09-29: scorrimento orizzontale, 8 miniature da 72dp non
+    // stanno nella larghezza di un telefono (prima venivano tagliate).
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+    ) {
         map.forEach { (id, url) ->
             if (url.isNotBlank()) {
                 AsyncImage(

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- colors.xml — v1.6.0 — 2026-09-23 -->
+<!-- colors.xml — v1.7.0 — 2026-09-23 -->
 <resources>
     <!-- Sfondo dell'icona launcher adattiva: teal primario della palette app. -->
     <color name="ic_launcher_background">#0F766E</color>

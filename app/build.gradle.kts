@@ -1,4 +1,4 @@
-// app/build.gradle.kts — v1.0.0 — 2026-09-20 00:10 UTC
+// app/build.gradle.kts — v1.7.0 — 2026-09-24 (google-services condizionale, coil, icone estese; v1.0.0 — 2026-09-20 00:10 UTC)
 //
 // Modulo Android dell'app Plumber Diary. Scelte principali (vedi context.md
 // per il ragionamento completo):
@@ -16,7 +16,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    // v1.6.0 — 2026-09-23: il plugin google-services NON è più applicato
+    // v1.7.0 — 2026-09-23: il plugin google-services NON è più applicato
     // in blocco: senza app/google-services.json il task processDebugGoogleServices
     // falliva e l'app non compilava "out of the box" (vedi SETUP.md). Ora viene
     // applicato solo se il file è presente (il plugin resta dichiarato con
@@ -77,7 +77,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
     implementation("androidx.navigation:navigation-compose:2.8.1")
 
-    // v1.6.0 — 2026-09-23: icone estese (Groups/Settings/Summarize ecc. usate da
+    // v1.7.0 — 2026-09-23: icone estese (Groups/Settings/Summarize ecc. usate da
     // PlumberScaffold e dalle schermate) + core-ktx esplicito (ContextCompat,
     // FileProvider, startForegroundService).
     implementation("androidx.compose.material:material-icons-extended")
@@ -110,12 +110,12 @@ dependencies {
     implementation("com.itextpdf:itext7-core:8.0.5")
 
     // --- Caricamento immagini (minature delle foto "display" di Storage nelle
-    //     schede Dettaglio/Cliente) — v1.6.0 2026-09-24 ---
+    //     schede Dettaglio/Cliente) — v1.7.0 2026-09-24 ---
     implementation("io.coil-kt:coil-compose:2.7.0")
 
     // --- Google Calendar (promemoria dal recap) ---
     implementation("com.google.api-client:google-api-client-android:2.7.0")
-    // v1.6.0 — 2026-09-23: la versione v3-rev20240930-2.0.0 non esiste su
+    // v1.7.0 — 2026-09-23: la versione v3-rev20240930-2.0.0 non esiste su
     // Maven Central (verificata il 2026-09-23); quella più vicina è rev20240927.
     implementation("com.google.apis:google-api-services-calendar:v3-rev20240927-2.0.0")
 

@@ -1,4 +1,4 @@
-// ArticleRepository.kt — v1.6.0 — 2026-09-23
+// ArticleRepository.kt — v1.7.0 — 2026-09-23
 //
 // Listino articoli CONDIVISO a livello di squadra (teams/{teamId}/articles),
 // requisito 11: un'unica fonte per tutti i membri, mai duplicata per utente.

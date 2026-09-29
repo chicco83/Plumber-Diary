@@ -1,4 +1,4 @@
-// BackendClient.kt — v1.0.0 — 2026-09-20 00:30 UTC
+// BackendClient.kt — v1.7.0 — 2026-09-23 (sendRecapEmail, sendMandatino; v1.0.0 — 2026-09-20 00:30 UTC)
 package com.plumberdiary.app.data
 
 import com.plumberdiary.app.auth.AuthRepository
@@ -45,7 +45,7 @@ class BackendClient(
         post("accept-invite", JSONObject().put("teamId", teamId).put("inviteCode", inviteCode))
     }
 
-    // v1.6.0 — 2026-09-23: i due endpoint di invio email (requisiti 6/12 e 9)
+    // v1.7.0 — 2026-09-23: i due endpoint di invio email (requisiti 6/12 e 9)
     // erano documentati in backend/README ma non ancora raggiungibili dall'app.
 
     /** Requisito 6/12: recap giornaliero con foto HD a [recipientEmail]. */

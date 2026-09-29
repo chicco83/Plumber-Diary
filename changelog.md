@@ -48,6 +48,10 @@ Prima stesura dell'architettura tecnica e dello scaffolding di codice (finora so
 ## 1.6.0 — 2026-09-24
 - Decisione sugli account (solo documentazione, nessuna modifica al codice): struttura attuale mantenuta (Firestore Spark + Vercel Hobby + GitHub Actions). Firebase su un **progetto nuovo** nello stesso account Google del family tracker, per avere quote Spark, regole di sicurezza e utenti Auth separati. Vercel su un **account nuovo**, così un'eventuale sospensione non coinvolge il backend del family tracker.
 - Registrato in `context.md` il rischio accettato: il piano Vercel Hobby è riservato a uso non commerciale e Plumber Diary rientra nell'uso commerciale; la via di migrazione prevista, se servisse, è Cloud Functions su Firebase Blaze.
+
+## 1.7.0 — 2026-09-24 (scritta da Qwen, IA locale)
+> Nota aggiunta il 2026-09-29: questa versione è stata sviluppata da Qwen e pubblicata nel commit `3122a84` con autore "Claude"; in origine era etichettata anch'essa 1.6.0 e registrata senza titolo proprio dentro la voce precedente. Rinumerata qui (e nelle etichette del codice) per distinguerla. Molti punti elencati sotto sono stati corretti nella 1.8.0: il codice di questa versione non compilava.
+
 Implementazione completa delle schermate (chiuso il punto "schermate ancora stub") e messa in piedi del setup manuale:
 - **Correzioni al foreground service** (`LocationTrackingService`): la sosta APERTA viene ora persistita su Firestore a ogni fix (prima esisteva solo in memoria e andava persa al kill del processo); classifica della kind (sede/pausa/da verificare) estratta in `classifyKind()`; il check della notifica in tempo reale salta anche le soste silenziate con "Non ora" (`Stop.realtimeDismissedAt`, nuovo campo).
 - **`PlumberDiaryApp.onCreate()`**: init di osmdroid con user-agent personalizzato (senza, il tile server OSM rifiuta le richieste e la mappa Squadra resta vuota).
@@ -60,3 +64,50 @@ Implementazione completa delle schermate (chiuso il punto "schermate ancora stub
 - **URL backend centralizzato** in `data/BackendConfig.kt` (prima duplicato in 5 file).
 - **`backend/storage.rules`** (nuovo) + section storage in `firebase.json`: un solo `firebase deploy` pubblica regole Firestore, indici e regole Storage.
 - **`SETUP.md`** nella radice: guida passo-passo delle configurazioni manuali (Firebase, regole, Vercel + env var, URL backend, build, checklist di test end-to-end, cron pulizia, troubleshooting).
+
+## 1.8.0 — 2026-09-29
+Review completa della 1.7.0 e correzione di tutti i problemi trovati. **Non ancora compilato**: in questo ambiente non c'è l'SDK Android, il primo build va fatto in Android Studio (vedi `SETUP.md`).
+
+**Errori di compilazione della 1.7.0 corretti**
+- `SquadraScreen`: import di `Marker` dal package sbagliato, `toObject` senza import, `onDispose` dentro `LaunchedEffect`, `Color(Color)`, `setIcon` con un `Bitmap` al posto di un `Drawable`.
+- `RecapScreen`: `items(...)` senza import.
+- `DettaglioScreen`: `stopPhotoDisplay` chiamata con 3 argomenti invece di 4.
+- `NotificaConfermaScreen`: funzione locale passata come `onClick = goHome`.
+- `RapportinoScreen`: riscritta (variabili mai dichiarate, funzione `@Composable` chiamata da una coroutine, `onStart` al posto di `onDragStart`, `drawContent` inesistente, funzione usata prima di essere dichiarata).
+- `OpzioniScreen`: `await()` fuori da una coroutine, 5 switch con `it` in conflitto.
+- `DashboardScreen`: tipo dichiarato `Triple<Long,…>` riempito con una `String`.
+
+**Bug funzionali corretti**
+- **Perdita di dati**: il foreground service riscriveva l'intero documento della sosta a ogni fix, cancellando cliente, note, foto, materiali e conferme inseriti dall'utente. Ora service e schermate scrivono ciascuno solo i propri campi, con merge (`StopRepository.writeTrackingFields` / `saveUserEdits`).
+- **Notifica "Sei da…" ripetuta a ogni fix**: il controllo leggeva la copia in memoria, dove "confermato"/"non ora" erano sempre vuoti, e rileggeva tutti i clienti ogni volta (rischio di sforare le 50.000 letture gratuite al giorno). Ora parte al massimo una volta per sosta.
+- **Soste di transito**: soste più brevi di 5 minuti (semafori, traffico) non vengono più salvate. Prima ogni fix in movimento generava una sosta da 0 minuti.
+- **Soste "in corso" per sempre**: fermando il tracciamento o facendo logout la sosta aperta viene chiusa; al riavvio una sosta aperta senza fix da oltre 30 minuti viene chiusa invece di essere ripresa.
+- **Offline**: i fix sono elaborati uno alla volta e le scritture del service non attendono il server. Prima, senza rete, le coroutine si accavallavano creando soste duplicate.
+- **Crash**: il service non va più in crash per un errore di rete o dopo il logout; il logout ferma il tracciamento.
+- **Miniature foto mai visibili** (`PhotoGrid`: mancava `await()` sull'URL).
+- **Foto perse**: foto di interventi e clienti ora salvate subito sul documento (arrayUnion), non solo al pulsante "Salva".
+- **Foto HD della scheda cliente mai cancellate** (caricate su `display.jpg.orig`): ora la scheda cliente salva solo la copia compressa.
+- **`storage.rules` non pubblicabili** (`exists` → `firestore.exists`); aggiunti limite di 25 MB e solo immagini, con content-type impostato negli upload.
+- **Scheda Cliente irraggiungibile**: nuova schermata `ClientiScreen` (anagrafica condivisa, ricerca, creazione) dalle Opzioni; link "Apri scheda cliente" nel Dettaglio.
+- **Correzione massiva dello Storico**: assegnava sempre il primo cliente della lista; ora il cliente si sceglie.
+- **Firma del rapportino**: nel PDF finiva solo la diagonale del riquadro; ora è la firma tracciata.
+- **Km totali** in Home, Recap e Storico mille volte più piccoli (km passati dove servivano metri).
+- **Colonne senza scorrimento**: in Dettaglio, Cliente, Opzioni, Storico, Dashboard, Home, Squadra e Rapportino i pulsanti in fondo erano fuori schermo. In Recap la lista copriva i pulsanti di conferma.
+- Mappa Squadra: rilasciata uscendo dalla schermata e ricentrata sulla sede quando disponibile; i colleghi che fermano il tracciamento compaiono come offline.
+
+**Bug già presenti nello scaffolding 1.4/1.5 (mio), corretti**
+- **Tap sulla notifica con l'app già aperta**: `MainActivity` non gestiva `onNewIntent` e il tap non faceva nulla.
+- **Permesso notifiche mai richiesto**: `POST_NOTIFICATIONS` (Android 13+), senza il quale nessuna notifica compariva; ora lo chiede la Home.
+- **Scritture concorrenti sull'anagrafica condivisa**: si perdevano le modifiche dei colleghi (ora campi mirati, arrayUnion, posizioni note in transazione).
+- **Race al primo avvio**: la sessione poteva essere vuota nelle schermate (ora impostata dalla NavHost prima di mostrarle).
+- **Foto elaborate sul thread UI**: ora fuori dal main thread.
+
+**Requisiti completati**
+- **Recap serale programmato** (requisito 3): notifica "Recap di oggi pronto" all'orario delle Opzioni (WorkManager, `RecapScheduler`/`RecapWorker`); il nuovo orario vale dal salvataggio.
+- **Mail di recap all'amministrazione** (requisito 6, default ON): parte automaticamente alla **conferma del recap**, così contiene i dati già corretti; resta anche il pulsante manuale.
+- **"Vedi recap dei colleghi"** (requisito 11, default OFF): nello Storico, selettore del collega; mostra in sola lettura i suoi recap confermati.
+
+**Documentazione e versioni**
+- Rinumerata come 1.7.0 la versione di Qwen (vedi sopra).
+- Aggiornate le intestazioni di versione dei file che la 1.7.0 aveva modificato senza incrementarle.
+- Aggiornati `context.md`, `manual.md` e `SETUP.md`.

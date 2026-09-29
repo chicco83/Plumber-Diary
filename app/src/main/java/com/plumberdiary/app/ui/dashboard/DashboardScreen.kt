@@ -1,4 +1,4 @@
-// DashboardScreen.kt — v1.6.0 — 2026-09-23
+// DashboardScreen.kt — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-23)
 //
 // Versione precedente (v1.0.0 — 2026-09-20 00:10 UTC): stub con solo il titolo,
 // sostituita il 2026-09-23 dall'implementazione (requisito 17): ore totali, km
@@ -11,6 +11,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,7 +38,6 @@ import com.plumberdiary.app.recap.DailyDistanceCalculator
 import com.plumberdiary.app.ui.common.Format
 import com.plumberdiary.app.ui.common.rememberActiveSession
 import java.util.Calendar
-import kotlinx.coroutines.launch
 
 @Composable
 fun DashboardScreen(navController: NavHostController) {
@@ -43,7 +48,9 @@ fun DashboardScreen(navController: NavHostController) {
     var totalKm by remember { mutableStateOf(0.0) }
     var totalMaterials by remember { mutableStateOf(0.0) }
     var interventions by remember { mutableStateOf(0) }
-    var perClient by remember { mutableStateOf<List<Pair<String, Triple<Long, Double, Int>>>>(emptyList()) }
+    // v1.8.0 — 2026-09-29: era Triple<Long, Double, Int>, ma il primo valore
+    // calcolato è l'etichetta della durata (String): non compilava.
+    var perClient by remember { mutableStateOf<List<Pair<String, Triple<String, Double, Int>>>>(emptyList()) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
@@ -78,8 +85,12 @@ fun DashboardScreen(navController: NavHostController) {
         } catch (e: Exception) { errorMessage = e.message }
     }
 
-    Column(modifier = Modifier.padding(20.dp)) {
-        Text("Dashboard mensile — $monthLabel")
+    Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(20.dp)) {
+        // v1.8.0 — 2026-09-29: freccia indietro, prima la schermata non ne aveva.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Filled.ArrowBack, null) }
+            Text("Dashboard mensile — $monthLabel", modifier = Modifier.weight(1f))
+        }
 
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
             StatTile("Ore", Format.durationLabel(totalMinutes), Modifier.weight(1f))

@@ -1,4 +1,4 @@
-// PhotoUploader.kt — v1.0.0 — 2026-09-20 00:10 UTC
+// PhotoUploader.kt — v1.8.0 — 2026-09-29 (v1.0.0 — 2026-09-20 00:10 UTC)
 package com.plumberdiary.app.photo
 
 import android.content.Context
@@ -6,7 +6,10 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.ktx.storageMetadata
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import kotlin.math.min
 
@@ -26,19 +29,48 @@ class PhotoUploader(
     private val context: Context,
     private val storage: FirebaseStorage = FirebaseStorage.getInstance(),
 ) {
-    data class UploadResult(val photoId: String, val displayPath: String, val originalPath: String)
+    // Versione precedente (v1.0.0 — 2026-09-20), sostituita il 2026-09-29:
+    // originalPath era obbligatorio, così la scheda cliente — che non ha una
+    // mail di recap in cui usare l'HD — caricava comunque l'originale su un
+    // percorso ("display.jpg.orig") che il cleanup non cancella mai.
+    //
+    // data class UploadResult(val photoId: String, val displayPath: String, val originalPath: String)
+    // suspend fun upload(sourceUri: Uri, displayPath: String, originalPath: String, photoId: String): UploadResult {
+    //     val originalBytes = readBytes(sourceUri)
+    //     storage.getReference(originalPath).putBytes(originalBytes).await()
 
-    suspend fun upload(sourceUri: Uri, displayPath: String, originalPath: String, photoId: String): UploadResult {
-        val originalBytes = readBytes(sourceUri)
+    data class UploadResult(val photoId: String, val displayPath: String, val originalPath: String?)
+
+    /**
+     * [originalPath] null = solo copia display (foto della scheda cliente).
+     * Valorizzato solo per le foto degli interventi, che vanno in HD nella mail
+     * di recap (requisito 12) e il cui originale viene poi cancellato dal
+     * backend (percorso che termina in /original.jpg, vedi cleanup.js).
+     */
+    suspend fun upload(sourceUri: Uri, displayPath: String, originalPath: String?, photoId: String): UploadResult {
+        // v1.8.0 — 2026-09-29: lettura e ricompressione fuori dal main thread
+        // (chiamato dalle schermate: decodificare una foto da 12 MP sul thread
+        // UI bloccava l'app per secondi).
+        val originalBytes = withContext(Dispatchers.IO) { readBytes(sourceUri) }
 
         // Copia "original": stessi byte del file scelto, nessuna ricompressione
         // (è quella che finirà in alta risoluzione nella mail di recap).
-        storage.getReference(originalPath).putBytes(originalBytes).await()
+        // v1.8.0 — 2026-09-29: content-type esplicito, richiesto da
+        // backend/storage.rules (solo immagini) e utile al client email che
+        // riceve l'allegato.
+        if (originalPath != null) {
+            val originalType = context.contentResolver.getType(sourceUri) ?: "image/jpeg"
+            storage.getReference(originalPath)
+                .putBytes(originalBytes, storageMetadata { contentType = originalType })
+                .await()
+        }
 
         // Copia "display": ridimensionata sul lato lungo e ricompressa in JPEG,
         // target ~300-500 KB (vedi tabella limiti Firebase Storage in context.md).
-        val displayBytes = compress(originalBytes)
-        storage.getReference(displayPath).putBytes(displayBytes).await()
+        val displayBytes = withContext(Dispatchers.Default) { compress(originalBytes) }
+        storage.getReference(displayPath)
+            .putBytes(displayBytes, storageMetadata { contentType = "image/jpeg" })
+            .await()
 
         return UploadResult(photoId, displayPath, originalPath)
     }

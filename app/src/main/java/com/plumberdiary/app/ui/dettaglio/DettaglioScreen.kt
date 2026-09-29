@@ -1,4 +1,4 @@
-// DettaglioScreen.kt — v1.6.0 — 2026-09-23
+// DettaglioScreen.kt — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-23)
 //
 // Versione precedente (v1.0.0 — 2026-09-20 00:10 UTC): stub con solo il titolo,
 // sostituita il 2026-09-23 dal form completo di una singola sosta (requisiti
@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
@@ -112,13 +114,20 @@ fun DettaglioScreen(navController: NavHostController, stopId: String) {
                 }
                 // Gli id salvati sulla sosta sono esattamente quelli usati come
                 // nome file in Storage (stesso UUID per original e display).
-                stop = current.copy(photoIds = current.photoIds + newPhotoIds)
-                photoStatus = "${uris.size} foto caricate (originale + display)."
+                // v1.8.0 — 2026-09-29: salvati SUBITO su Firestore (arrayUnion).
+                // Prima restavano solo nello stato della schermata: senza premere
+                // "Salva" le foto erano caricate su Storage ma perse dalla sosta,
+                // e quindi assenti anche dalla mail di recap.
+                stopRepository.addPhotoIds(session.teamId, session.uid, current.id, newPhotoIds)
+                stop = (stop ?: current).let { it.copy(photoIds = it.photoIds + newPhotoIds) }
+                photoStatus = "${uris.size} foto caricate e salvate sulla sosta."
             } catch (e: Exception) { photoStatus = "Errore caricamento foto: ${e.message}" }
         }
     }
 
-    Column(modifier = Modifier.padding(20.dp)) {
+    // v1.8.0 — 2026-09-29: verticalScroll — cinque card più il pulsante non
+    // stanno in uno schermo, "Salva modifiche" restava irraggiungibile.
+    Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Filled.ArrowBack, null) }
             Text("Dettaglio posizione", modifier = Modifier.weight(1f))
@@ -131,16 +140,20 @@ fun DettaglioScreen(navController: NavHostController, stopId: String) {
             ElevatedCard(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                 Column(Modifier.padding(12.dp)) {
                     Text("Orari", style = MaterialTheme.typography.titleMedium)
+                    // v1.8.0 — 2026-09-29: l'inizio non può superare la fine (e
+                    // viceversa); prima si potevano salvare durate negative.
                     TimeStepper(
                         label = "Inizio",
                         valueMillis = current.startedAt,
-                        onValueChange = { stop = current.copy(startedAt = it) },
+                        onValueChange = {
+                            if (current.endedAt == 0L || it < current.endedAt) stop = current.copy(startedAt = it)
+                        },
                     )
                     if (current.endedAt > 0L) {
                         TimeStepper(
                             label = "Fine",
                             valueMillis = current.endedAt,
-                            onValueChange = { stop = current.copy(endedAt = it) },
+                            onValueChange = { if (it > current.startedAt) stop = current.copy(endedAt = it) },
                         )
                     } else {
                         Text("Sosta ancora in corso")
@@ -172,8 +185,15 @@ fun DettaglioScreen(navController: NavHostController, stopId: String) {
                         }
                     }
                     if (current.clientId != null) {
-                        TextButton(onClick = { stop = current.copy(clientId = null, kind = StopKind.UNRESOLVED) }) {
-                            Text("Rimuovi cliente")
+                        Row {
+                            // v1.8.0 — 2026-09-29: accesso alla scheda cliente (prima
+                            // nessuna schermata ci portava).
+                            TextButton(onClick = { navController.navigate(Routes.cliente(current.clientId!!)) }) {
+                                Text("Apri scheda cliente")
+                            }
+                            TextButton(onClick = { stop = current.copy(clientId = null, kind = StopKind.UNRESOLVED) }) {
+                                Text("Rimuovi cliente")
+                            }
                         }
                     }
                     if (showNewClient) {
@@ -189,7 +209,7 @@ fun DettaglioScreen(navController: NavHostController, stopId: String) {
                             if (session == null || newClientName.isBlank()) return@Button
                             scope.launch {
                                 try {
-                                    val id = clientRepository.upsert(
+                                    val id = clientRepository.create(
                                         session.teamId,
                                         ClientRecord(name = newClientName.trim(), phone = newClientPhone.trim(),
                                             createdBy = session.uid, createdAt = System.currentTimeMillis()),
@@ -270,9 +290,10 @@ fun DettaglioScreen(navController: NavHostController, stopId: String) {
                 Column(Modifier.padding(12.dp)) {
                     Text("Foto intervento", style = MaterialTheme.typography.titleMedium)
                     Text("${current.photoIds.size} foto allegate (originale HD + display)")
-                    // v1.6.0 — 2026-09-24: miniature delle foto già caricate (prima mancavano).
+                    // v1.7.0 — 2026-09-24: miniature delle foto già caricate (prima mancavano).
                     current.photoIds.takeLast(8).let { ids ->
-                        PhotoGrid(ids) { id -> FirestorePaths.stopPhotoDisplay(session!!.teamId, current.id, id) }
+                        // v1.8.0 — 2026-09-29: mancava l'uid (3 argomenti invece di 4, non compilava).
+                        PhotoGrid(ids) { id -> FirestorePaths.stopPhotoDisplay(session!!.teamId, session.uid, current.id, id) }
                     }
                     Button(onClick = { photoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("Aggiungi foto dalla galleria") }
@@ -286,10 +307,12 @@ fun DettaglioScreen(navController: NavHostController, stopId: String) {
                     if (session == null) return@Button
                     scope.launch {
                         try {
-                            stopRepository.upsert(session.teamId, session.uid, s)
-                            if (s.clientId != null) {
-                                val c = clientRepository.getById(session.teamId, s.clientId!!)
-                                if (c != null) clientRepository.recordVisit(session.teamId, c, s.lat, s.lon, System.currentTimeMillis())
+                            // v1.8.0 — 2026-09-29: solo i campi dell'utente, orari
+                            // inclusi (qui sono una correzione manuale); prima upsert
+                            // dell'intero documento, in conflitto con il service.
+                            stopRepository.saveUserEdits(session.teamId, session.uid, s, includeTimes = true)
+                            s.clientId?.let { clientId ->
+                                clientRepository.recordVisit(session.teamId, clientId, s.lat, s.lon, System.currentTimeMillis())
                             }
                             saveMessage = "Salvato."
                         } catch (e: Exception) { saveMessage = e.message }

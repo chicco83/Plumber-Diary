@@ -1,4 +1,4 @@
-// SquadraScreen.kt — v1.6.0 — 2026-09-23
+// SquadraScreen.kt — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-23)
 //
 // Versione precedente (v1.0.0 — 2026-09-20 00:10 UTC): stub con mappa fissa su
 // Bologna e nessun marker, sostituita il 2026-09-23 dall'implementazione reale
@@ -11,6 +11,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
 import android.graphics.Paint
+import android.graphics.drawable.BitmapDrawable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
@@ -51,10 +54,10 @@ import com.plumberdiary.app.ui.Routes
 import com.plumberdiary.app.ui.common.Format
 import com.plumberdiary.app.ui.common.PlumberScaffold
 import com.plumberdiary.app.ui.common.rememberActiveSession
-import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
-import org.osmdroid.markers.Marker
+// v1.8.0 — 2026-09-29: il package era sbagliato (org.osmdroid.markers.Marker
+// non esiste), errore di compilazione.
+import org.osmdroid.views.overlay.Marker
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 
@@ -72,16 +75,19 @@ fun SquadraScreen(navController: NavHostController) {
 
     // Centro mappa: sede impostata nelle Opzioni, altrimenti posizione propria,
     // altrimenti coordinate generiche d'Italia.
-    var centerLat by remember { mutableStateOf(43.7696) }
-    var centerLon by remember { mutableStateOf(11.2558) }
+    var centerLat by remember { mutableStateOf(DEFAULT_LAT) }
+    var centerLon by remember { mutableStateOf(DEFAULT_LON) }
 
     LaunchedEffect(Unit) {
         if (session == null) return@LaunchedEffect
         try {
             val settings = SettingsRepository().get(session.teamId, session.uid)
-            val ownDoc = FirebaseFirestore.getInstance()
-                .document("teams/${session.teamId}/members/${session.uid}").get().await()
-            val ownLive = try { ownDoc.toObject<TeamMember>()?.liveLocation } catch (_: Exception) { null }
+            // v1.8.0 — 2026-09-29: prima accesso Firestore diretto con
+            // toObject<TeamMember>() senza import (non compilava); ora dal repository.
+            // val ownDoc = FirebaseFirestore.getInstance()
+            //     .document("teams/${session.teamId}/members/${session.uid}").get().await()
+            // val ownLive = try { ownDoc.toObject<TeamMember>()?.liveLocation } catch (_: Exception) { null }
+            val ownLive = teamRepository.getMember(session.teamId, session.uid)?.liveLocation
             if (settings.depotLat != null && settings.depotLon != null) {
                 centerLat = settings.depotLat; centerLon = settings.depotLon
             } else if (ownLive != null) {
@@ -91,14 +97,32 @@ fun SquadraScreen(navController: NavHostController) {
     }
 
     // Ascolto in tempo reale dei membri (requisito 11).
-    LaunchedEffect(Unit) {
-        if (session == null) return@LaunchedEffect
-        val listener = teamRepository.listenMembers(session.teamId) { list -> members = list }
-        onDispose { listener.remove() }
+    // v1.8.0 — 2026-09-29: prima era un LaunchedEffect con onDispose (non
+    // compila: onDispose esiste solo in DisposableEffect) e il listener non
+    // veniva mai rimosso uscendo dalla schermata.
+    // LaunchedEffect(Unit) {
+    //     if (session == null) return@LaunchedEffect
+    //     val listener = teamRepository.listenMembers(session.teamId) { list -> members = list }
+    //     onDispose { listener.remove() }
+    // }
+    DisposableEffect(session) {
+        val listener = session?.let { s -> teamRepository.listenMembers(s.teamId) { list -> members = list } }
+        onDispose { listener?.remove() }
+    }
+
+    // v1.8.0 — 2026-09-29: la MapView va messa in pausa/staccata quando si
+    // lascia la schermata (prima restava attiva: tile e thread di osmdroid in
+    // memoria), e ricentrata quando arriva la posizione della sede.
+    val mapHolder = remember { MapHolder() }
+    DisposableEffect(Unit) {
+        onDispose {
+            mapHolder.view?.onPause()
+            mapHolder.view?.onDetach()
+        }
     }
 
     PlumberScaffold(navController = navController, currentRoute = Routes.SQUADRA) { padding ->
-        Column(modifier = Modifier.padding(padding).padding(20.dp)) {
+        Column(modifier = Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(20.dp)) {
             Text("Squadra oggi")
 
             AndroidView(
@@ -109,9 +133,14 @@ fun SquadraScreen(navController: NavHostController) {
                         controller.setZoom(14.0)
                         controller.setCenter(GeoPoint(centerLat, centerLon))
                         onResume()
+                        mapHolder.view = this
                     }
                 },
                 update = { mapView ->
+                    if (!mapHolder.centeredOnData && (centerLat != DEFAULT_LAT || centerLon != DEFAULT_LON)) {
+                        mapView.controller.setCenter(GeoPoint(centerLat, centerLon))
+                        mapHolder.centeredOnData = true
+                    }
                     // Ricalcola i marker ad ogni aggiornamento dei membri.
                     mapView.overlays.removeAll { it is Marker }
                     for (m in members) {
@@ -120,7 +149,9 @@ fun SquadraScreen(navController: NavHostController) {
                         val marker = Marker(mapView).apply {
                             setPosition(GeoPoint(live.lat, live.lon))
                             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                            setIcon(coloredCircleBitmap(m.colorHex))
+                            // v1.8.0 — 2026-09-29: setIcon vuole un Drawable, non un
+                            // Bitmap (prima: setIcon(coloredCircleBitmap(...)), non compilava).
+                            icon = BitmapDrawable(mapView.context.resources, coloredCircleBitmap(m.colorHex))
                             // Il dettaglio (nome/stato) è nell'elenco sotto la mappa:
                             // nessun InfoWindow custom per non dipendere da API
                             // osmdroid soggette a variazioni di versione.
@@ -137,7 +168,9 @@ fun SquadraScreen(navController: NavHostController) {
                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             Modifier.size(14.dp).clip(CircleShape)
-                                .background(Color(androidColorSafe(m.colorHex))),
+                                // v1.8.0 — 2026-09-29: era Color(androidColorSafe(...)),
+                                // un Color passato al costruttore Color: non compilava.
+                                .background(androidColorSafe(m.colorHex)),
                         )
                         Column(Modifier.weight(1f).padding(start = 10.dp)) {
                             Text(m.displayName.ifBlank { m.email.ifBlank { "Membro" } })
@@ -184,12 +217,21 @@ fun SquadraScreen(navController: NavHostController) {
     }
 }
 
+/** Riferimento alla MapView per il rilascio in onDispose (non è stato della UI). */
+private class MapHolder {
+    var view: MapView? = null
+    var centeredOnData = false
+}
+
+private const val DEFAULT_LAT = 43.7696
+private const val DEFAULT_LON = 11.2558
+
 /** Cerchietto colorato (icona marker) con punto bianco centrale. */
 private fun coloredCircleBitmap(colorHex: String): Bitmap {
     val b = Bitmap.createBitmap(36, 36, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(b)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    // v1.6.0 — 2026-09-24: fix compilazione — androidColorSafe() restituisce un
+    // v1.7.0 — 2026-09-24: fix compilazione — androidColorSafe() restituisce un
     // Color Compose (senza toArgb()); qui serve il colore Android per il Paint.
     paint.color = try {
         AndroidColor.parseColor(if (colorHex.startsWith("#")) colorHex else "#$colorHex")

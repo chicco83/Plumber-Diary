@@ -1,4 +1,4 @@
-// Format.kt — v1.6.0 — 2026-09-23
+// Format.kt — v1.7.0 — 2026-09-23
 //
 // Formattatori condivisi da tutte le schermate (orari, durate, km, euro) e
 // helper per la sessione: prima delle schermate reali dello scaffolding non

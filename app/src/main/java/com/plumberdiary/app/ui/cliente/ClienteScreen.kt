@@ -1,4 +1,4 @@
-// ClienteScreen.kt — v1.6.0 — 2026-09-23
+// ClienteScreen.kt — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-23)
 //
 // Versione precedente (v1.0.0 — 2026-09-20 00:10 UTC): stub con solo il titolo,
 // sostituita il 2026-09-23 dalla scheda completa (requisiti 8/9/10/11):
@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -58,7 +60,9 @@ import com.plumberdiary.app.ui.common.rememberActiveSession
 import java.io.File
 import java.util.Base64
 import java.util.Calendar
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun ClienteScreen(navController: NavHostController, clientId: String) {
@@ -107,15 +111,24 @@ fun ClienteScreen(navController: NavHostController, clientId: String) {
                     val photoId = java.util.UUID.randomUUID().toString()
                     // Le foto della scheda cliente usano solo la copia display
                     // (l'alta risoluzione serve alla mail di recap degli interventi).
+                    // v1.8.0 — 2026-09-29: il codice contraddiceva questo commento e
+                    // caricava anche l'originale HD su "...display.jpg.orig", un
+                    // percorso che il cleanup non cancella mai: i 5 GB gratuiti di
+                    // Storage si sarebbero riempiti di copie HD inutili.
+                    // FirestorePaths.clientPhotoDisplay(session.teamId, c.id, photoId) + ".orig",
                     uploader.upload(
                         uri,
                         FirestorePaths.clientPhotoDisplay(session.teamId, c.id, photoId),
-                        FirestorePaths.clientPhotoDisplay(session.teamId, c.id, photoId) + ".orig",
+                        null,
                         photoId,
                     )
                     newIds += photoId
                 }
-                client = c.copy(photoIds = c.photoIds + newIds)
+                // v1.8.0 — 2026-09-29: salvate subito sul cliente (arrayUnion);
+                // prima restavano solo nello stato della schermata fino a "Salva
+                // anagrafica", altrimenti andavano perse.
+                clientRepository.addPhotoIds(session.teamId, c.id, newIds)
+                client = (client ?: c).let { it.copy(photoIds = it.photoIds + newIds) }
                 message = "${uris.size} foto allegate alla scheda."
             } catch (e: Exception) { message = "Errore foto: ${e.message}" }
         }
@@ -142,7 +155,8 @@ fun ClienteScreen(navController: NavHostController, clientId: String) {
         }
     }
 
-    Column(modifier = Modifier.padding(20.dp)) {
+    // v1.8.0 — 2026-09-29: verticalScroll, prima listino e pulsanti in fondo erano fuori schermo.
+    Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Filled.ArrowBack, null) }
             Text("Scheda cliente", modifier = Modifier.weight(1f))
@@ -163,7 +177,10 @@ fun ClienteScreen(navController: NavHostController, clientId: String) {
                     Button(onClick = {
                         if (session == null) return@Button
                         scope.launch {
-                            try { clientRepository.upsert(session.teamId, c); message = "Anagrafica salvata." }
+                            // v1.8.0 — 2026-09-29: solo i campi anagrafici (prima set dell'intero
+                            // documento condiviso: cancellava foto/posizioni aggiunte nel frattempo
+                            // da un collega).
+                            try { clientRepository.updateAnagrafica(session.teamId, c); message = "Anagrafica salvata." }
                             catch (e: Exception) { message = e.message }
                         }
                     }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("Salva anagrafica") }
@@ -174,7 +191,7 @@ fun ClienteScreen(navController: NavHostController, clientId: String) {
                 Column(Modifier.padding(12.dp)) {
                     Text("Foto della scheda", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
                     Text("${c.photoIds.size} foto allegate")
-                    // v1.6.0 — 2026-09-24: miniature delle foto già caricate (prima mancavano).
+                    // v1.7.0 — 2026-09-24: miniature delle foto già caricate (prima mancavano).
                     c.photoIds.takeLast(8).let { ids ->
                         PhotoGrid(ids) { id -> FirestorePaths.clientPhotoDisplay(session!!.teamId, c.id, id) }
                     }
@@ -262,11 +279,14 @@ fun ClienteScreen(navController: NavHostController, clientId: String) {
                     mandatinoSending = true
                     scope.launch {
                         try {
-                            val pdfFile = File(context.cacheDir, "mandatino-${cc.id}.pdf")
-                            java.io.FileOutputStream(pdfFile).use { out ->
-                                MandatinoPdfGenerator.generate(out, cc, mandatinoStops, mandatinoPeriod)
+                            // v1.8.0 — 2026-09-29: generazione PDF fuori dal main thread.
+                            val base64 = withContext(Dispatchers.IO) {
+                                val pdfFile = File(context.cacheDir, "mandatino-${cc.id}.pdf")
+                                java.io.FileOutputStream(pdfFile).use { out ->
+                                    MandatinoPdfGenerator.generate(out, cc, mandatinoStops, mandatinoPeriod)
+                                }
+                                Base64.getEncoder().encodeToString(pdfFile.readBytes())
                             }
-                            val base64 = Base64.getEncoder().encodeToString(pdfFile.readBytes())
                             backendClient.sendMandatino(s.teamId, cc.id, mandatinoRecipient.trim(), mandatinoPeriod, base64)
                             message = "Mandatino inviato a ${mandatinoRecipient.trim()}"
                         } catch (e: Exception) { message = "Invio mandatino fallito: ${e.message}" }

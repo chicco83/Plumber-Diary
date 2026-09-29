@@ -1,4 +1,4 @@
-// storage.rules — v1.6.0 — 2026-09-24
+// storage.rules — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-24)
 //
 // Regole di sicurezza per Firebase Storage (foto, requisito 12). Mancavano
 // nello scaffolding: senza di esse il bucket resta in modalità "test" e le
@@ -22,16 +22,29 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    // v1.8.0 — 2026-09-29: nelle regole Storage la lettura incrociata di
+    // Firestore si scrive firestore.exists(...). Con exists(...) (sintassi delle
+    // regole Firestore) il deploy falliva. Prima:
+    //   exists(/databases/(default)/documents/teams/$(teamId)/members/$(request.auth.uid));
     function isTeamMember(teamId) {
       return isSignedIn() &&
-        exists(/databases/(default)/documents/teams/$(teamId)/members/$(request.auth.uid));
+        firestore.exists(/databases/(default)/documents/teams/$(teamId)/members/$(request.auth.uid));
+    }
+
+    // v1.8.0 — 2026-09-29: solo immagini, massimo 25 MB (una foto HD da
+    // smartphone ne pesa 3-10): evita che un errore o un file sbagliato
+    // consumi lo spazio gratuito da 5 GB. Le cancellazioni restano permesse.
+    function isValidImageUpload() {
+      return request.resource == null ||
+        (request.resource.size < 25 * 1024 * 1024 &&
+         request.resource.contentType.matches('image/.*'));
     }
 
     // Foto della scheda cliente (condivise, requisito 10/11): ogni membro
     // legge e carica; le miniature "display" sono l'unica copia conservata.
     match /teams/{teamId}/clients/{clientId}/photos/{photoId}/{allPaths=**} {
       allow read: if isTeamMember(teamId);
-      allow write: if isTeamMember(teamId);
+      allow write: if isTeamMember(teamId) && isValidImageUpload();
     }
 
     // Foto degli interventi (requisito 12): scrive SOLO il proprietario della
@@ -40,7 +53,7 @@ service firebase.storage {
     // mail di recap e cancellato dopo l'invio (backend/api/cleanup.js).
     match /teams/{teamId}/members/{uid}/stops/{stopId}/photos/{photoId}/{allPaths=**} {
       allow read: if isTeamMember(teamId);
-      allow write: if isSignedIn() && request.auth.uid == uid;
+      allow write: if isSignedIn() && request.auth.uid == uid && isTeamMember(teamId) && isValidImageUpload();
     }
 
     // Tutto il resto del bucket è chiuso.

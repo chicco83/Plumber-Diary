@@ -1,4 +1,4 @@
-// NotificaConfermaScreen.kt — v1.6.0 — 2026-09-24
+// NotificaConfermaScreen.kt — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-24)
 //
 // Versione precedente (v1.0.0 — 2026-09-20 00:10 UTC): stub con un solo
 // pulsante "Sì, confermo" che non scriveva nulla, sostituita il 2026-09-24
@@ -87,7 +87,9 @@ fun NotificaConfermaScreen(navController: NavHostController, clientId: String) {
 
     Column(modifier = Modifier.padding(20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = goHome) { Icon(Icons.Filled.ArrowBack, null) }
+            // v1.8.0 — 2026-09-29: era onClick = goHome (una funzione locale non si
+            // passa per nome senza ::, non compilava).
+            IconButton(onClick = { goHome() }) { Icon(Icons.Filled.ArrowBack, null) }
             Text("Conferma intervento", modifier = Modifier.weight(1f))
         }
 
@@ -95,7 +97,7 @@ fun NotificaConfermaScreen(navController: NavHostController, clientId: String) {
         val stop = openStop
         if (c == null || stop == null) {
             Text(if (message != null) message!! else "Caricamento... o nessuna sosta in corso da confermare.")
-            Button(onClick = goHome, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) { Text("Torna alla Home") }
+            Button(onClick = { goHome() }, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) { Text("Torna alla Home") }
         } else {
             ElevatedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
@@ -113,7 +115,10 @@ fun NotificaConfermaScreen(navController: NavHostController, clientId: String) {
                     busy = true
                     scope.launch {
                         try {
-                            stopRepository.upsert(
+                            // v1.8.0 — 2026-09-29: solo i campi dell'utente (prima upsert
+                            // dell'intero documento, che il service a sua volta
+                            // sovrascriveva al fix successivo cancellando la conferma).
+                            stopRepository.saveUserEdits(
                                 s.teamId, s.uid,
                                 stop.copy(
                                     clientId = c.id,
@@ -122,7 +127,7 @@ fun NotificaConfermaScreen(navController: NavHostController, clientId: String) {
                                     realtimeConfirmedAt = System.currentTimeMillis(),
                                 ),
                             )
-                            clientRepository.recordVisit(s.teamId, c, stop.lat, stop.lon, System.currentTimeMillis())
+                            clientRepository.recordVisit(s.teamId, c.id, stop.lat, stop.lon, System.currentTimeMillis())
                             goHome()
                         } catch (e: Exception) {
                             message = e.message
@@ -145,7 +150,7 @@ fun NotificaConfermaScreen(navController: NavHostController, clientId: String) {
                     busy = true
                     scope.launch {
                         try {
-                            stopRepository.upsert(
+                            stopRepository.saveUserEdits(
                                 s.teamId, s.uid,
                                 stop.copy(realtimeDismissedAt = System.currentTimeMillis()),
                             )

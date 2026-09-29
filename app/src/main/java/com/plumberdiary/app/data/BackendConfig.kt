@@ -1,4 +1,4 @@
-// BackendConfig.kt — v1.6.0 — 2026-09-24
+// BackendConfig.kt — v1.7.0 — 2026-09-24
 //
 // URL base del deploy Vercel del backend (vedi backend/README.md). Centralizzato
 // il 2026-09-24: prima era duplicato in PlumberDiaryNavHost + 4 schermate

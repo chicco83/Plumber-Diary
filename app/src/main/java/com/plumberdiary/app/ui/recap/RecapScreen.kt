@@ -1,4 +1,4 @@
-// RecapScreen.kt — v1.6.0 — 2026-09-23
+// RecapScreen.kt — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-23)
 //
 // Versione precedente (v1.0.0 — 2026-09-20 00:10 UTC): stub con solo il titolo
 // "Riepilogo giornata", sostituita il 2026-09-23 dall'implementazione reale:
@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+// v1.8.0 — 2026-09-29: import mancante, items(stops) non compilava.
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.OutlinedButton
@@ -83,18 +85,41 @@ fun RecapScreen(navController: NavHostController) {
 
     LaunchedEffect(Unit) { refresh() }
 
+    /** Invia il recap all'amministrazione se attivo nelle Opzioni; ritorna l'esito da mostrare. */
+    suspend fun sendRecapEmail(teamId: String, uid: String): String = try {
+        val settings = settingsRepository.get(teamId, uid)
+        val recipient = settings.recapEmailAddress.trim()
+        when {
+            !settings.recapEmailEnabled -> "Invio recap via email disattivato nelle Opzioni."
+            recipient.isEmpty() -> "Invio recap fallito: manca l'email dell'amministrazione nelle Opzioni."
+            else -> {
+                backendClient.sendRecapEmail(teamId, dayStartMillis, System.currentTimeMillis() + 60_000L, recipient)
+                "Recap inviato a $recipient (foto in alta risoluzione incluse)."
+            }
+        }
+    } catch (e: Exception) {
+        "Invio recap fallito: ${e.message}"
+    }
+
     PlumberScaffold(navController = navController, currentRoute = Routes.RECAP) { padding ->
         Column(modifier = Modifier.padding(padding).padding(20.dp)) {
             Text("Riepilogo giornata")
             if (stops.isNotEmpty()) {
                 val totalMinutes = stops.filter { it.endedAt > 0L }.sumOf { Format.durationMinutes(it.startedAt, it.endedAt) }
-                Text("Totale: ${Format.durationLabel(totalMinutes)} · ${Format.km(DailyDistanceCalculator.totalKm(stops))} · ${stops.size} soste")
+                // v1.8.0 — 2026-09-29: Format.km vuole metri e totalKm restituisce km:
+                // prima il totale del giorno risultava mille volte più piccolo.
+                val totalKmLabel = Format.km(DailyDistanceCalculator.totalKm(stops) * 1000)
+                Text("Totale: ${Format.durationLabel(totalMinutes)} · ${totalKmLabel} · ${stops.size} soste")
             }
 
             if (stops.isEmpty()) {
                 Text("Nessuna sosta registrata oggi.")
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 12.dp)) {
+                // v1.8.0 — 2026-09-29: weight(1f) — senza, con molte soste la lista
+                // occupava tutto lo schermo e i pulsanti "Conferma recap"/"Invia"
+                // sotto restavano irraggiungibili.
+                // LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 12.dp)) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f).padding(vertical = 12.dp)) {
                     items(stops) { stop ->
                         val suggested: ClientRecord? = if (stop.clientId == null && stop.kind != StopKind.DEPOT && stop.kind != StopKind.BREAK) {
                             ClientMatcher.findSuggestedClient(stop.lat, stop.lon, clients)
@@ -123,8 +148,10 @@ fun RecapScreen(navController: NavHostController) {
                                         stops = stops.map { if (it.id == stop.id) updated else it }
                                         scope.launch {
                                             try {
-                                                stopRepository.upsert(session!!.teamId, session.uid, updated)
-                                                clientRepository.recordVisit(session.teamId, suggested, stop.lat, stop.lon, System.currentTimeMillis())
+                                                // v1.8.0 — 2026-09-29: solo i campi dell'utente (prima
+                                                // upsert dell'intero documento, in conflitto con il service).
+                                                stopRepository.saveUserEdits(session!!.teamId, session.uid, updated)
+                                                clientRepository.recordVisit(session.teamId, suggested.id, stop.lat, stop.lon, System.currentTimeMillis())
                                                 recapMessage = "Cliente confermato: ${suggested.name}"
                                             } catch (e: Exception) { recapMessage = e.message }
                                         }
@@ -169,17 +196,28 @@ fun RecapScreen(navController: NavHostController) {
                 Button(
                     onClick = {
                         scope.launch {
+                            // Versione precedente (v1.7.0 — 2026-09-23), sostituita il 2026-09-29:
+                            // upsert dell'intero documento di ogni sosta (sovrascriveva i
+                            // campi del service sulla sosta ancora aperta) e nessun invio
+                            // della mail, che restava solo manuale.
                             try {
                                 val updated = stops.map { it.copy(confirmedInRecap = true) }
-                                for (s in updated) stopRepository.upsert(session.teamId, session.uid, s)
+                                for (s in updated) stopRepository.saveUserEdits(session.teamId, session.uid, s)
                                 // Aggiorna le posizioni note dei clienti confermati (requisito 4).
                                 for (s in updated) {
-                                    val c = clients.firstOrNull { it.id == s.clientId } ?: continue
-                                    clientRepository.recordVisit(session.teamId, c, s.lat, s.lon, System.currentTimeMillis())
+                                    val clientId = s.clientId ?: continue
+                                    clientRepository.recordVisit(session.teamId, clientId, s.lat, s.lon, System.currentTimeMillis())
                                 }
                                 stops = updated
                                 recapMessage = "Recap confermato: le modifiche sono salvate."
-                            } catch (e: Exception) { recapMessage = e.message }
+                            } catch (e: Exception) {
+                                recapMessage = e.message
+                                return@launch
+                            }
+
+                            // Requisito 6: mail all'amministrazione, attiva di default,
+                            // inviata alla conferma così contiene i dati già corretti.
+                            emailMessage = sendRecapEmail(session.teamId, session.uid)
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -190,16 +228,7 @@ fun RecapScreen(navController: NavHostController) {
                         if (session == null) return@OutlinedButton
                         scope.launch {
                             emailMessage = null
-                            try {
-                                val settings = settingsRepository.get(session.teamId, session.uid)
-                                val recipient = settings.recapEmailAddress.trim()
-                                if (!settings.recapEmailEnabled || recipient.isEmpty()) {
-                                    emailMessage = "Recap email disattivato o indirizzo mancante: impostalo nelle Opzioni."
-                                    return@launch
-                                }
-                                backendClient.sendRecapEmail(session.teamId, dayStartMillis, System.currentTimeMillis() + 60_000L, recipient)
-                                emailMessage = "Recap inviato a $recipient (foto in alta risoluzione incluse)."
-                            } catch (e: Exception) { emailMessage = "Invio recap fallito: ${e.message}" }
+                            emailMessage = sendRecapEmail(session.teamId, session.uid)
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),

@@ -1,17 +1,32 @@
-// RapportinoScreen.kt — v1.6.0 — 2026-09-23
+// RapportinoScreen.kt — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-23; v1.0.0 — 2026-09-20 00:10 UTC)
 //
-// Versione precedente (v1.0.0 — 2026-09-20 00:10 UTC): stub con un solo
-// pulsante "Salta", sostituita il 2026-09-23 dall'implementazione completa
-// (requisito 15): area di firma su Canvas (disegno a dito), riepilogo
+// Requisito 15: area di firma su Canvas (disegno a dito), riepilogo
 // orari/note/materiali, generazione PDF con [RapportinoPdfGenerator] e
 // condivisione via FileProvider. Il pulsante "Salta la firma" è SEMPRE
 // presente e non bloccante: genera/invia comunque il rapportino con
 // signatureBitmap = null (vincolo esplicito dell'utente).
+//
+// Versione precedente (v1.7.0 — 2026-09-23), sostituita il 2026-09-29. Non
+// compilava e, anche corretta, non avrebbe funzionato:
+//  - dichiarava `strokes`/`currentStroke` ma usava `paths`, `currentPath`,
+//    `signatureCleared`, mai dichiarati;
+//  - detectDragGestures(onStart = ...): il parametro si chiama onDragStart;
+//  - signatureToBitmap() era @Composable ma chiamata da una coroutine;
+//  - sharePdf() usata prima della sua dichiarazione (funzione locale);
+//  - drawContent { } non esiste nello scope del Canvas;
+//  - i tratti erano in una lista non osservabile: la firma non si vedeva
+//    mentre la si disegnava;
+//  - la conversione per il PDF disegnava solo la diagonale del riquadro:
+//
+//    androidPath.moveTo(bounds.left * scale, bounds.top * scale)
+//    androidPath.lineTo(bounds.right * scale, bounds.bottom * scale)
+//
+// Ora i tratti sono liste di punti in pixel, osservabili, disegnati sia a
+// schermo sia nel bitmap del PDF alla stessa scala dell'area di firma.
 package com.plumberdiary.app.ui.rapportino
 
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.graphics.Paint
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -21,6 +36,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
@@ -32,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -43,7 +61,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.navigation.NavHostController
@@ -55,6 +75,7 @@ import com.plumberdiary.app.pdf.RapportinoPdfGenerator
 import com.plumberdiary.app.ui.common.Format
 import com.plumberdiary.app.ui.common.rememberActiveSession
 import java.io.File
+import java.io.FileOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -69,9 +90,10 @@ fun RapportinoScreen(navController: NavHostController, stopId: String) {
     var client by remember { mutableStateOf<ClientRecord?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
 
-    // Firma: lista di tratti, ognuno una sequenza di punti (Offset in dp).
-    val strokes = remember { mutableListOf<List<Offset>>() }
-    var currentStroke by remember { mutableStateOf<MutableList<Offset>?>(null) }
+    // Firma: tratti completati + tratto in corso, punti in pixel dell'area di firma.
+    val strokes = remember { mutableStateListOf<List<Offset>>() }
+    var currentStroke by remember { mutableStateOf<List<Offset>>(emptyList()) }
+    var signatureAreaSize by remember { mutableStateOf(IntSize.Zero) }
 
     LaunchedEffect(stopId) {
         if (session == null) return@LaunchedEffect
@@ -80,25 +102,6 @@ fun RapportinoScreen(navController: NavHostController, stopId: String) {
             val clientId = stop?.clientId
             if (clientId != null) client = ClientRepository().getById(session.teamId, clientId)
         } catch (e: Exception) { message = e.message }
-    }
-
-    fun generateAndShare(withSignature: Boolean) {
-        val s = stop ?: return
-        val c = client
-        scope.launch {
-            message = "Generazione PDF..."
-            try {
-                val bitmap: Bitmap? = if (withSignature && paths.isNotEmpty()) {
-                    withContext(Dispatchers.Default) { signatureToBitmap() }
-                } else null
-                val pdfFile = File(context.cacheDir, "rapportino-${s.id}.pdf")
-                java.io.FileOutputStream(pdfFile).use { out ->
-                    RapportinoPdfGenerator.generate(out, c ?: ClientRecord(name = "—"), s, bitmap)
-                }
-                sharePdf(pdfFile)
-                message = if (bitmap != null) "Rapportino generato con firma — scegli l'app per inviarlo." else "Rapportino generato senza firma — scegli l'app per inviarlo."
-            } catch (e: Exception) { message = "Errore: ${e.message}" }
-        }
     }
 
     fun sharePdf(file: File) {
@@ -112,28 +115,37 @@ fun RapportinoScreen(navController: NavHostController, stopId: String) {
         context.startActivity(Intent.createChooser(intent, "Invia rapportino"))
     }
 
-    @Composable
-    fun signatureToBitmap(): Bitmap {
-        // Il Canvas Compose non espone dimensioni qui: si usa una dimensione fissa
-        // coerente con l'area di disegno (360x200 dp ≈ px a density 1; il tratto
-        // viene ridisegnato in scala, sufficiente per un PDF).
-        val widthPx = 720
-        val heightPx = 400
-        val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bmp)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.BLACK
-            strokeWidth = 6f
-            style = Paint.Style.STROKE
+    fun generateAndShare(withSignature: Boolean) {
+        val s = stop ?: return
+        val c = client
+        val strokesSnapshot = strokes.toList()
+        val size = signatureAreaSize
+        scope.launch {
+            message = "Generazione PDF..."
+            try {
+                val pdfFile = withContext(Dispatchers.IO) {
+                    val bitmap = if (withSignature && strokesSnapshot.isNotEmpty() && size != IntSize.Zero) {
+                        signatureToBitmap(strokesSnapshot, size)
+                    } else {
+                        null
+                    }
+                    File(context.cacheDir, "rapportino-${s.id}.pdf").also { file ->
+                        FileOutputStream(file).use { out ->
+                            RapportinoPdfGenerator.generate(out, c ?: ClientRecord(name = "—"), s, bitmap)
+                        }
+                    }
+                }
+                sharePdf(pdfFile)
+                message = if (withSignature && strokesSnapshot.isNotEmpty()) {
+                    "Rapportino generato con firma — scegli l'app per inviarlo."
+                } else {
+                    "Rapportino generato senza firma — scegli l'app per inviarlo."
+                }
+            } catch (e: Exception) { message = "Errore: ${e.message}" }
         }
-        for (p in paths) {
-            // Path Compose in coordinate dp: scala grossolana per riempire il bitmap.
-            canvas.drawPath(p.toAndroidPath(2f), paint)
-        }
-        return bmp
     }
 
-    Column(modifier = Modifier.padding(20.dp)) {
+    Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Filled.ArrowBack, null) }
             Text("Rapportino intervento", modifier = Modifier.weight(1f))
@@ -164,31 +176,42 @@ fun RapportinoScreen(navController: NavHostController, stopId: String) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(200.dp)
+                            .onSizeChanged { signatureAreaSize = it }
                             .pointerInput(Unit) {
                                 detectDragGestures(
-                                    onStart = { offset: Offset ->
-                                        val p = Path().apply { moveTo(offset) }
-                                        currentPath = p
-                                        paths.add(p)
-                                    },
+                                    onDragStart = { offset -> currentStroke = listOf(offset) },
                                     onDrag = { change, _ ->
-                                        currentPath?.lineTo(change.position)
+                                        change.consume()
+                                        currentStroke = currentStroke + change.position
                                     },
+                                    onDragEnd = {
+                                        if (currentStroke.size > 1) strokes.add(currentStroke)
+                                        currentStroke = emptyList()
+                                    },
+                                    onDragCancel = { currentStroke = emptyList() },
                                 )
                             },
-                    ) { drawContent {
-                        for (p in paths) {
-                            drawPath(p, Color.Black, style = Stroke(width = 4f))
+                    ) {
+                        (strokes + listOf(currentStroke)).forEach { points ->
+                            if (points.size > 1) {
+                                val path = Path().apply {
+                                    moveTo(points.first().x, points.first().y)
+                                    points.drop(1).forEach { lineTo(it.x, it.y) }
+                                }
+                                drawPath(path, Color.Black, style = Stroke(width = 4f))
+                            }
                         }
-                    } }
+                    }
                     OutlinedButton(onClick = {
-                        paths.clear(); currentPath = null; signatureCleared = true
+                        strokes.clear()
+                        currentStroke = emptyList()
                     }) { Text("Cancella firma") }
                 }
             }
 
             Button(
                 onClick = { generateAndShare(withSignature = true) },
+                enabled = strokes.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Genera rapportino con firma e condividi") }
 
@@ -204,18 +227,29 @@ fun RapportinoScreen(navController: NavHostController, stopId: String) {
     }
 }
 
-/** Converte un Path Compose (dp) in android.graphics.Path scalato. */
-private fun Path.toAndroidPath(scale: Float): android.graphics.Path {
-    val androidPath = android.graphics.Path()
-    // Approximation: usa i punti campionati dal bounding box; per la firma a dito
-    // è sufficiente una resa vettoriale semplificata (il tratto resta leggibile).
-    val bounds = this.bounds
-    if (bounds.isEmpty) return androidPath
-    // Campiona lungo il perimetro visibile del tratto: si ridisegnano i segmenti
-    // principali usando la rappresentazione interna non accessibile, quindi si
-    // usa un approccio semplice: linea spezzata dei punti chiave.
-    // (Per una resa perfetta servirebbe un bridge Path→Canvas; accettabile per MVP.)
-    androidPath.moveTo(bounds.left * scale, bounds.top * scale)
-    androidPath.lineTo(bounds.right * scale, bounds.bottom * scale)
-    return androidPath
+/**
+ * Ridisegna i tratti su un bitmap delle stesse dimensioni (in pixel)
+ * dell'area di firma: i punti arrivano dai gesti già in pixel, quindi la
+ * firma nel PDF è identica a quella tracciata a schermo.
+ */
+private fun signatureToBitmap(strokes: List<List<Offset>>, size: IntSize): Bitmap {
+    val bitmap = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    canvas.drawColor(android.graphics.Color.WHITE)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.BLACK
+        strokeWidth = 4f
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+    for (points in strokes) {
+        if (points.size < 2) continue
+        val path = android.graphics.Path().apply {
+            moveTo(points.first().x, points.first().y)
+            points.drop(1).forEach { lineTo(it.x, it.y) }
+        }
+        canvas.drawPath(path, paint)
+    }
+    return bitmap
 }

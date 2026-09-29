@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- AndroidManifest.xml — v1.0.0 — 2026-09-20 00:10 UTC -->
+<!-- AndroidManifest.xml — v1.7.0 — 2026-09-23 (FileProvider; v1.0.0 — 2026-09-20 00:10 UTC) -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Posizione: foreground prima, background richiesto come step separato
@@ -59,7 +59,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- v1.6.0 — 2026-09-23: FileProvider per condividere i PDF generati
+        <!-- v1.7.0 — 2026-09-23: FileProvider per condividere i PDF generati
              (mandatino/rapportino) con l'app di email/file manager via ACTION_SEND.
              Le autorità usano ${applicationId} così non ci sono collisioni. -->
         <provider

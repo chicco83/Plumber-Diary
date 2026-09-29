@@ -1,4 +1,4 @@
-// PlumberDiaryApp.kt — v1.1.0 — 2026-09-20 00:30 UTC
+// PlumberDiaryApp.kt — v1.7.0 — 2026-09-23 (init osmdroid; v1.1.0 — 2026-09-20 00:30 UTC)
 package com.plumberdiary.app
 
 import android.app.Application
@@ -30,7 +30,7 @@ class PlumberDiaryApp : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        // v1.6.0 — 2026-09-23: init di osmdroid PRIMA di qualunque MapView.
+        // v1.7.0 — 2026-09-23: init di osmdroid PRIMA di qualunque MapView.
         // Senza un user-agent personalizzato il tile server di OpenStreetMap
         // rifiuta le richieste e la mappa della schermata Squadra resta vuota.
         val osmConfig = OsmdroidConfigurationFactory.newOsmdroidConfiguration(this, "Plumber Diary")

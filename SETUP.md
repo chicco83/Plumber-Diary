@@ -1,11 +1,13 @@
 # SETUP — Plumber Diary (configurazioni manuali)
 
-Versione: 1.6.0 — 2026-09-24
+Versione: 1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-24)
 
 Tutto quello che va fatto **fuori dal codice** per portare l'app in piedi: progetto
 Firebase, regole di sicurezza, deploy Vercel del backend e primo build Android.
-Il codice lato app e lato backend è completo (vedi `changelog.md`); qui si tratta
-solo di collegarlo ai servizi reali. Stima tempo totale: **45–60 minuti**,
+Il codice lato app e lato backend è scritto (vedi `changelog.md`) ma **non è
+ancora stato compilato né provato su un telefono**: il primo build del passo 5
+può segnalare errori residui da sistemare. Qui si tratta di collegarlo ai
+servizi reali. Stima tempo totale: **45–60 minuti**,
 dipende quasi solo dai tempi di creazione dei progetti.
 
 > Convenzione: i comandi sono per bash/Git Bash. I percorsi presuppongono di
@@ -71,7 +73,7 @@ firebase deploy               # pubblica firestore.rules + indexes + storage.rul
 - `firestore.rules`: membership come criterio di accesso; la creazione di
   `teams/{teamId}/members/{uid}` è **vietata dal client** (solo l'endpoint
   `accept-invite` con Admin SDK può crearla) — non "correggere" questa regola.
-- `storage.rules` (nuovo in v1.6.0): foto clienti condivise, foto interventi
+- `storage.rules` (nuovo in v1.7.0): foto clienti condivise, foto interventi
   scrivibili solo dal proprietario della sosta.
 - `firestore.indexes.json`: indici semplici su `stops.startedAt`/`endedAt`
   (le query dell'app usano range+orderBy sullo stesso campo: non servono indici
@@ -121,7 +123,7 @@ object BackendConfig {
 }
 ```
 
-Da v1.6.0 tutte le schermate (NavHost, Recap, Cliente, Squadra, Opzioni) la
+Da v1.7.0 tutte le schermate (NavHost, Recap, Cliente, Squadra, Opzioni) la
 leggono da qui: non cercare più stringhe `vercel.app` sparse.
 
 ## Passo 5 — Build e primo run (Android Studio)
@@ -133,8 +135,12 @@ leggono da qui: non cercare più stringhe `vercel.app` sparse.
    tracciamento in background, un telefono reale è molto più fedele (il Play
    Services dell'emulator simula male i fix GPS continui).
 3. *Run* → l'app parte su **Login**.
-4. Al primo avvio concedi: posizione (foreground), poi la richiesta separata per
-   il background, e le notifiche (Android 13+).
+4. Al primo avvio concedi dalla Home, uno alla volta: posizione, notifiche
+   (Android 13+, senza non arrivano né "Sei da…?" né il recap serale) e
+   posizione in background.
+5. Se il build fallisce, gli errori più probabili riguardano versioni delle
+   dipendenze o API Compose marcate come sperimentali: copia l'errore e
+   riportalo, va corretto nel codice (non disattivare i controlli).
 
 ### Checklist di test end-to-end (in ordine)
 
@@ -147,12 +153,18 @@ leggono da qui: non cercare più stringhe `vercel.app` sparse.
       → tocca → schermata conferma → *Sì, confermo* → torna alla Home con la sosta
       associata. (*Non ora* deve silenziare la ri-notifica per quella sosta.)
 - [ ] **Recap**: una card per sosta; suggerimento cliente con conferma inline;
-      modifica note; *Conferma recap* salva tutto.
-- [ ] **Invia recap via email** (imposta prima l'indirizzo in Opzioni → Recap
-      serale): arriva la mail con le foto in alta risoluzione (se caricate).
+      modifica note; *Conferma recap* salva tutto **e invia la mail**
+      all'amministrazione (imposta prima l'indirizzo in Opzioni → Recap serale):
+      arriva con le foto in alta risoluzione, se caricate.
+- [ ] **Recap serale programmato**: imposta in Opzioni un orario tra pochi
+      minuti e salva → arriva la notifica "Recap di oggi pronto" (può tardare di
+      qualche minuto) → toccandola si apre il Recap.
+- [ ] **Soste brevi**: una fermata sotto i 5 minuti non deve comparire nella
+      timeline; fermando il tracciamento la sosta in corso si chiude.
 - [ ] **Dettaglio**: correggi orari, associa/crea cliente, aggiungi materiali dal
       listino, allega una foto dalla galleria → le miniature compaiono subito.
-- [ ] **Cliente** (da Dettaglio o Storico): modifica anagrafica, *Mandatino delle
+- [ ] **Cliente** (Opzioni → *Anagrafica clienti e listino articoli*, oppure
+      *Apri scheda cliente* dal Dettaglio): modifica anagrafica, *Mandatino delle
       ore* → conferma esplicita → mail al destinatario con PDF allegato.
 - [ ] **Squadra**: generi un codice invito; da un secondo telefono/account fai
       login e *Unisciti* (ID squadra + codice) → entrambi i marker compaiono sulla
@@ -163,8 +175,9 @@ leggono da qui: non cercare più stringhe `vercel.app` sparse.
 - [ ] **Rapportino** (da Recap, su una sosta con cliente): firma sul canvas →
       *Genera rapportino* → si apre la share sheet con il PDF; anche *Salta la
       firma* genera il PDF (con dicitura "non firmato").
-- [ ] **Storico** (giorni precedenti) e **Dashboard mensile** (ore/km/materiali/
-      interventi per cliente).
+- [ ] **Storico** (giorni precedenti, correzione massiva scegliendo il cliente;
+      con "Vedi recap dei colleghi" attivo, selettore del collega in sola
+      lettura) e **Dashboard mensile** (ore/km/materiali/interventi per cliente).
 
 ## Passo 6 — Cron di pulizia (GitHub Actions)
 
@@ -192,20 +205,20 @@ controllando la Console Storage.
 | Le funzioni rispondono ma le scritture Firestore falliscono | regole non pubblicate o progetto Firebase diverso da quello di `google-services.json` | `firebase deploy` nel progetto corretto (passo 2) |
 | Foto caricate ma miniature vuote in Dettaglio/Cliente | `storage.rules` non pubblicate (lettura negata) | passo 2: `firebase deploy` include ora anche le regole Storage |
 | Mappa Squadra grigia/vuota | tile server OSM lento al primo avvio, o init osmdroid mancante | attendi/zooma; l'init è già in `PlumberDiaryApp.onCreate` — non rimuoverlo |
-| Notifica "Sei da…" non arriva mai | soglia non superata, posizione su sede/pausa, oppure già confermata/silenziata sulla stessa sosta | controlla Opzioni (soglia, sede, pause); il campo `realtimeDismissedAt` sulla sosta blocca la ri-notifica finché la sosta resta aperta |
+| Notifica "Sei da…" non arriva mai | permesso notifiche negato (Android 13+), soglia non superata, posizione su sede/pausa, nessun cliente noto in quel punto, oppure già notificata per quella sosta (parte una volta sola) | concedi le notifiche dalla Home; controlla Opzioni (soglia, sede, pause) |
+| Upload foto rifiutato | `storage.rules` non pubblicate, o file non immagine / oltre 25 MB | passo 2: `firebase deploy` |
 | Recap email: "Invio recap fallito" | SMTP non configurato o App Password scaduta | passo 3.2; le App Password Gmail si rigenerano in *Password app* |
 
-## Prossimi step (fuori scope di stasera, già documentati nel codice)
+## Prossimi step (già documentati nel codice)
 
 1. **Google Calendar vero** (requisito 7): oggi il promemoria è un testo salvato
    sulla sosta (`Stop.reminderText`); l'evento calendario reale richiede OAuth
    (le dipendenze `google-api-client`/`calendar` sono già in `build.gradle.kts`).
-2. **Push FCM "recap pronto"** all'orario configurato: `PlumberFcmService` gestisce
-   già i payload data-only, manca il job client che schedula l'invio (WorkManager)
-   e la registrazione del token lato backend.
-3. **Invio recap automatico all'orario delle Opzioni**: oggi è manuale dal Recap
-   (*Invia recap via email*); lo schedulato riusa lo stesso endpoint.
-4. **Export CSV** della dashboard (ore/km/materiali per cliente) — requisito 17,
+2. **Export CSV** della dashboard (ore/km/materiali per cliente) — requisito 17,
    lato client, nessun backend coinvolto.
-5. **"Vedi recap dei colleghi"** (default OFF): la lettura è già consentita dalle
-   regole; manca il selettore UI in Storico che mostra i recap degli altri membri.
+3. **Push FCM lato server**: `PlumberFcmService` gestisce già i payload data-only,
+   manca la registrazione del token lato backend. Il recap serale non ne ha
+   bisogno: dalla 1.8.0 è programmato sul telefono con WorkManager.
+4. **Mandatino con le ore dei colleghi**: oggi include solo le proprie ore presso
+   il cliente; da decidere se in una squadra deve includere anche quelle degli
+   altri membri.

@@ -1,4 +1,4 @@
-// BootRestartReceiver.kt — v1.0.0 — 2026-09-20 00:10 UTC
+// BootRestartReceiver.kt — v1.7.0 — 2026-09-23 (ripristino bloccante della sessione; v1.0.0 — 2026-09-20 00:10 UTC)
 package com.plumberdiary.app.location
 
 import android.content.BroadcastReceiver
@@ -21,7 +21,7 @@ class BootRestartReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
 
-        // v1.6.0 — 2026-09-23: race condition dello scaffolding — il restore di
+        // v1.7.0 — 2026-09-23: race condition dello scaffolding — il restore di
         // CurrentSession in PlumberDiaryApp.onCreate è asincrono (coroutine su
         // Dispatchers.IO), quindi al momento del broadcast BOOT_COMPLETED poteva
         // non essere ancora completato e il tracciamento non ripartiva mai.

@@ -1,6 +1,6 @@
 # Context — Plumber Diary
 
-Versione: 1.6.0 — 2026-09-24 (v1.5.0 — 2026-09-20 00:30 UTC e precedenti, vedi changelog.md)
+Versione: 1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-24 di Qwen, v1.6.0 — 2026-09-24 e precedenti, vedi changelog.md)
 
 ## Obiettivo
 
@@ -45,8 +45,8 @@ Categorie di app esistenti, nessuna copre esattamente il caso d'uso (permanenza 
 - **Piattaforma**: Android nativo (Kotlin, Jetpack Compose) per il miglior controllo su tracciamento in background, geofencing e consumo batteria; backend leggero per sync multi-dispositivo e invio email/PDF (non indispensabile in v1, l'app può funzionare offline-first con sync opzionale).
 - **Rilevamento posizione**: `FusedLocationProviderClient` con `LocationRequest` a priorità bilanciata + significant-motion/activity recognition per ridurre consumo; clustering delle posizioni (raggio configurabile, es. 80–120 m) per formare le "soste".
 - **Riconoscimento cliente**: matching per posizione nota (raggio + tolleranza GPS) su storico interventi; se il tempo di sosta supera la soglia (default 15 min) e la posizione non è nota, viene proposta come "nuovo possibile cliente" nel recap.
-- **Recap serale**: notifica push all'orario configurato; schermata riepilogo editabile (orari, cliente, note, materiali, promemoria) con conferma finale.
-- **Invio email recap**: job schedulato che genera il riepilogo testuale/PDF e lo invia all'indirizzo amministrazione impostato nelle opzioni (default ON), allegando in **alta risoluzione** ogni foto presente sulle posizioni/interventi del giorno (vedi "Foto" sotto per come si gestiscono dimensione allegati e cancellazione dell'originale dopo l'invio).
+- **Recap serale**: notifica locale all'orario configurato (WorkManager, lavoro periodico giornaliero: può arrivare con qualche minuto di ritardo per risparmio batteria, senza bisogno del permesso per gli allarmi esatti); schermata riepilogo editabile (orari, cliente, note, materiali, promemoria) con conferma finale.
+- **Invio email recap** (decisione del 2026-09-29): parte automaticamente **alla conferma del recap** da parte dell'utente, non a un orario fisso, così l'amministrazione riceve dati già corretti (clienti, orari, note) invece di quelli grezzi del tracciamento; inviato all'indirizzo amministrazione impostato nelle opzioni (default ON), allegando in **alta risoluzione** ogni foto presente sulle posizioni/interventi del giorno (vedi "Foto" sotto per come si gestiscono dimensione allegati e cancellazione dell'originale dopo l'invio).
 - **Mandatino ore PDF**: generato on-demand dalla scheda cliente, sempre con step di conferma esplicito (dialog con riepilogo periodo/ore/materiali/destinatario) prima dell'invio.
 - **Privacy**: retention storico posizioni configurabile (default 12 mesi), permessi Android per posizione in background richiesti in modo esplicito e progressivo (foreground prima, poi background con spiegazione).
 - **Foto (cliente e/o intervento)**: selezione da galleria tramite `ActivityResultContracts.PickMultipleVisualMedia` (Photo Picker di sistema — non richiede il permesso `READ_MEDIA_IMAGES` su Android 13+). **Doppia risoluzione per ogni foto**:
@@ -95,44 +95,24 @@ Numeri di riferimento del piano Firebase **Spark** (gratuito, nessuna carta) e V
 
 **Conclusione pratica**: lo stesso stack a costo zero del progetto gemello (Firestore Spark + Vercel Hobby + GitHub Actions + osmdroid, niente Cloud Functions/Google Maps che richiederebbero Blaze/fatturazione) regge comodamente una squadra di qualche decina di tecnici senza avvicinarsi ai limiti gratuiti, **a patto di**: generare sempre la copia compressa per l'uso stabile in app, cancellare l'originale in alta risoluzione dopo l'invio della mail (o dopo il periodo di grazia), mantenere il sampling di posizione adattivo (non un GPS always-on ad alta frequenza), e tenere una guardia di quota giornaliera per dispositivo come già fatto nel progetto gemello (misura di sicurezza contro bug/loop, non perché ci si avvicini davvero al limite). Il collo di bottiglia più probabile a lungo termine resta lo storage foto (5 GB) se il job di pulizia degli originali dovesse fallire silenziosamente — motivo in più per farlo passare dallo stesso meccanismo GitHub Actions già verificato affidabile nel progetto gemello, non da un fire-and-forget lato client.
 
-## Stato implementazione (aggiornato al 2026-09-20)
+## Stato implementazione (aggiornato al 2026-09-29, v1.8.0)
 
-- **`app/`**: scaffolding Kotlin/Jetpack Compose creato. Implementati con
-  logica reale: modelli dati (`data/model/`), percorsi Firestore
-  (`data/FirestorePaths.kt`), repository (`data/repository/`), clustering
-  soste e riconoscimento cliente (`location/StopClusterer.kt`,
-  `location/ClientMatcher.kt`), esclusione sede/pause
-  (`location/DepotAndBreakFilter.kt`), foreground service di tracciamento
-  con sampling adattivo (`location/LocationTrackingService.kt`), notifica di
-  conferma in tempo reale (`notification/RealtimeConfirmNotifier.kt`), foto
-  a doppia risoluzione (`photo/PhotoUploader.kt`), generatori PDF mandatino
-  e rapportino (`pdf/`), calcolo km (`recap/DailyDistanceCalculator.kt`).
-  Navigazione Compose con una route per schermata del mockup: i layout
-  dettagliati sono ancora placeholder (`TODO` con riferimento al file
-  `.dc.html` corrispondente). **Non compilato/testato**: mancano
-  `google-services.json` di un vero progetto Firebase e le icone launcher
-  (vedi `app/README.md` per i passaggi manuali richiesti — stesso limite
-  incontrato all'avvio del progetto gemello gwatch-child-tracker, nessun SDK
-  Android disponibile in questo ambiente).
-- **`backend/`**: endpoint Vercel Functions scritti (`create-team`,
-  `create-invite`, `accept-invite`, `send-recap-email`, `send-mandatino`,
-  `cleanup`), Firestore rules e indici, workflow GitHub Actions per il cron
-  di pulizia. **Non deployato**: richiede un vero progetto Firebase e le
-  variabili d'ambiente elencate in `backend/README.md`.
-- **Login Google e selezione/creazione squadra**: scritti
-  (`auth/AuthRepository.kt`, `ui/auth/LoginScreen.kt`,
-  `ui/auth/TeamSelectionScreen.kt`, `session/SessionStore.kt`,
-  `data/BackendClient.kt`); `PlumberDiaryNavHost` apre su Login → (se
-  nessuna squadra salvata) Selezione/Creazione squadra → Home.
-  **In attesa del progetto Firebase reale** per essere testati: l'utente ha
-  scelto di fornire una chiave service account (generata dalla Console
-  Firebase) per farmi creare/configurare il progetto via API — stesso
-  procedimento già usato nel progetto gemello — invece di fare i passaggi a
-  mano in Console. Fino a quel momento restano scritti ma non verificabili.
-- Non ancora iniziati: ViewModel che colleghino le altre schermate ai
-  repository, UI dettagliata pixel-per-pixel rispetto al mockup,
-  integrazione reale Google Calendar (dipendenza dichiarata, wiring OAuth
-  non scritto).
+- **`app/`**: tutte le schermate implementate: Login, Selezione squadra, Home, Recap, Dettaglio, Anagrafica clienti, Scheda cliente, Squadra, Opzioni, Storico (con i recap dei colleghi), Dashboard, Rapportino, Conferma in tempo reale. Presenti anche il tracciamento in background con le regole di sede/pause/soglia/transiti, la notifica "Sei da…?", il recap serale programmato, le foto a doppia risoluzione, i PDF (mandatino e rapportino con firma saltabile) e i km.
+  - **Non ancora compilato né provato su un telefono**: in questo ambiente non c'è l'SDK Android. La 1.7.0 (Qwen) conteneva numerosi errori di compilazione, corretti nella 1.8.0 con una revisione riga per riga; il primo build in Android Studio potrebbe comunque segnalare dettagli residui (versioni delle librerie, API marcate sperimentali).
+  - Mancano `app/google-services.json` e l'URL reale del backend in `data/BackendConfig.kt` (vedi `SETUP.md`).
+- **`backend/`**: endpoint Vercel (`create-team`, `create-invite`, `accept-invite`, `send-recap-email`, `send-mandatino`, `cleanup`), Firestore rules e indici, Storage rules (1.7.0, corrette nella 1.8.0), cron GitHub Actions. **Non deployato**: servono il progetto Firebase e l'account Vercel nuovi (decisione del 2026-09-24).
+- **Scelte di funzionamento introdotte nella 1.8.0** (modificabili se non corrispondono all'uso reale):
+  - una sosta sotto i 5 minuti è considerata un transito e non viene salvata;
+  - una sosta rimasta aperta senza fix per oltre 30 minuti (tracciamento interrotto) viene chiusa all'ultima posizione nota;
+  - la notifica "Sei da…?" parte al massimo una volta per sosta;
+  - le opzioni modificate valgono per il tracciamento entro 10 minuti;
+  - la mail di recap parte alla conferma del recap (vedi sopra);
+  - i recap dei colleghi sono in sola lettura e mostrano solo i giorni che il collega ha confermato.
+- **Da decidere**: il mandatino ore di un cliente oggi include solo le proprie ore. In una squadra potrebbe dover includere anche quelle dei colleghi presso lo stesso cliente.
+- **Non ancora iniziati**:
+  - integrazione reale con Google Calendar (oggi il promemoria è solo un testo salvato sulla sosta);
+  - export CSV;
+  - push FCM lato server (token non registrato).
 
 ## Mockup
 

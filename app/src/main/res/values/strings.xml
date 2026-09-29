@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- strings.xml — v1.0.0 — 2026-09-20 00:10 UTC -->
+<!-- strings.xml — v1.7.0 — 2026-09-23 (v1.0.0 — 2026-09-20 00:10 UTC) -->
 <resources>
     <string name="app_name">Plumber Diary</string>
-    <!-- v1.6.0 — 2026-09-23: default_web_client_id NON è dichiarato qui a
+    <!-- v1.7.0 — 2026-09-23: default_web_client_id NON è dichiarato qui a
          proposito: lo genera il plugin google-services al build da
          google-services.json (vedi AuthRepository, che lo risolve a runtime
          con getIdentifier per non creare un riferimento compile-time a una

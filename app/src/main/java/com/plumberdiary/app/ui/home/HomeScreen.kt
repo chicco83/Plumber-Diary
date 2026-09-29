@@ -1,4 +1,4 @@
-// HomeScreen.kt — v1.6.0 — 2026-09-23
+// HomeScreen.kt — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-23)
 //
 // Versione precedente (v1.0.0 — 2026-09-20 00:10 UTC): stub con solo il titolo
 // "Giornata di oggi" e un TODO, sostituita il 2026-09-23 dall'implementazione
@@ -8,6 +8,7 @@
 package com.plumberdiary.app.ui.home
 
 import android.Manifest
+import android.os.Build
 import android.content.pm.PackageManager
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -19,6 +20,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.OutlinedButton
@@ -63,7 +66,9 @@ fun HomeScreen(navController: NavHostController) {
 
     var stops by remember { mutableStateOf<List<Stop>>(emptyList()) }
     var clientNames by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-    var trackingOn by remember { mutableStateOf(false) }
+    // v1.8.0 — 2026-09-29: stato letto dal service. Prima era dedotto dalla
+    // presenza di una sosta aperta, che ora viene salvata solo dopo 5 minuti.
+    var trackingOn by remember { mutableStateOf(LocationTrackingService.isRunning) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     // Permessi progressivi (vedi AndroidManifest: mai richiesti insieme su API 30+).
@@ -75,6 +80,15 @@ fun HomeScreen(navController: NavHostController) {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
             == PackageManager.PERMISSION_GRANTED)
     }
+    // v1.8.0 — 2026-09-29: da Android 13 le notifiche richiedono un permesso a
+    // runtime, mai chiesto prima: senza, "Sei da…?" (requisito 14) e il recap
+    // serale non comparivano.
+    var notificationsGranted by remember {
+        mutableStateOf(
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED,
+        )
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -83,6 +97,8 @@ fun HomeScreen(navController: NavHostController) {
             == PackageManager.PERMISSION_GRANTED
         backgroundGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
             == PackageManager.PERMISSION_GRANTED
+        notificationsGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
     }
 
     suspend fun refresh() {
@@ -95,7 +111,7 @@ fun HomeScreen(navController: NavHostController) {
             val all = StopRepository().getStopsForDay(session.teamId, session.uid, dayStart, System.currentTimeMillis() + 60_000L)
             stops = DailyDistanceCalculator.withDistances(all.sortedBy { it.startedAt })
             clientNames = ClientRepository().getAll(session.teamId).associate { it.id to it.name }
-            trackingOn = all.any { it.endedAt == 0L }
+            trackingOn = LocationTrackingService.isRunning
         } catch (e: Exception) {
             errorMessage = e.message
         }
@@ -104,7 +120,7 @@ fun HomeScreen(navController: NavHostController) {
     LaunchedEffect(Unit) { refresh() }
 
     PlumberScaffold(navController = navController, currentRoute = Routes.HOME) { padding ->
-        Column(modifier = Modifier.padding(padding).padding(20.dp)) {
+        Column(modifier = Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Giornata di oggi", modifier = Modifier.weight(1f))
                 if (fineGranted) {
@@ -132,6 +148,11 @@ fun HomeScreen(navController: NavHostController) {
                         ) { Text("Concedi posizione") }
                     }
                 }
+            } else if (!notificationsGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                OutlinedButton(
+                    onClick = { permissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS)) },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                ) { Text("Abilita le notifiche (conferma cliente e recap serale)") }
             } else if (fineGranted && !backgroundGranted) {
                 OutlinedButton(
                     onClick = { permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION)) },
@@ -141,7 +162,10 @@ fun HomeScreen(navController: NavHostController) {
 
             if (stops.isNotEmpty()) {
                 val totalMinutes = stops.filter { it.endedAt > 0L }.sumOf { Format.durationMinutes(it.startedAt, it.endedAt) }
-                Text("Totale: ${Format.durationLabel(totalMinutes)} · ${Format.km(DailyDistanceCalculator.totalKm(stops))}")
+                // v1.8.0 — 2026-09-29: Format.km vuole metri e totalKm restituisce km:
+                // prima il totale del giorno risultava mille volte più piccolo.
+                val totalKmLabel = Format.km(DailyDistanceCalculator.totalKm(stops) * 1000)
+                Text("Totale: ${Format.durationLabel(totalMinutes)} · ${totalKmLabel}")
             }
 
             errorMessage?.let { Text(it, color = androidx.compose.ui.graphics.Color.Red) }

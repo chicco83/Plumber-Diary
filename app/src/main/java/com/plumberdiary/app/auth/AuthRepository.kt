@@ -1,4 +1,4 @@
-// AuthRepository.kt — v1.0.0 — 2026-09-20 00:30 UTC
+// AuthRepository.kt — v1.7.0 — 2026-09-23 (default_web_client_id risolto a runtime; v1.0.0 — 2026-09-20 00:30 UTC)
 package com.plumberdiary.app.auth
 
 import android.content.Context
@@ -25,7 +25,7 @@ class AuthRepository(
     private val context: Context,
     private val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance(),
 ) {
-    // v1.6.0 — 2026-09-23: il default_web_client_id è generato dal plugin
+    // v1.7.0 — 2026-09-23: il default_web_client_id è generato dal plugin
     // google-services SOLO se app/google-services.json è presente (vedi
     // SETUP.md). Si risolve a runtime con getIdentifier invece di un
     // riferimento R.string compile-time, così il codice compila anche senza la
