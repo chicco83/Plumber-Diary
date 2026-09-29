@@ -1,4 +1,4 @@
-// RealtimeConfirmNotifier.kt — v1.0.0 — 2026-09-20 00:10 UTC
+// RealtimeConfirmNotifier.kt — v1.12.0 — 2026-09-29 (v1.0.0 — 2026-09-20 00:10 UTC)
 package com.plumberdiary.app.notification
 
 import android.app.NotificationChannel
@@ -20,6 +20,11 @@ import com.plumberdiary.app.data.model.Stop
  * "Notifica"): la vera scrittura su Firestore avviene lì, non nel
  * BroadcastReceiver dell'azione, per riusare gli stessi controlli/permessi
  * della UI invece di duplicarli.
+ *
+ * v1.12.0 — 2026-09-29: la notifica porta con sé l'id della sosta
+ * ([EXTRA_STOP_ID]). Prima la schermata di conferma associava il cliente
+ * alla sosta aperta NEL MOMENTO DEL TOCCO: toccando la notifica dopo essersi
+ * spostati, il cliente finiva sulla sosta sbagliata.
  */
 object RealtimeConfirmNotifier {
     private const val CHANNEL_ID = "realtime_client_confirm"
@@ -30,6 +35,7 @@ object RealtimeConfirmNotifier {
         val openIntent = Intent(context, MainActivity::class.java).apply {
             action = ACTION_CONFIRM_CLIENT
             putExtra(EXTRA_CLIENT_ID, suggestedClient.id)
+            putExtra(EXTRA_STOP_ID, openStop.id) // v1.12.0 — 2026-09-29
             putExtra(EXTRA_STOP_STARTED_AT, openStop.startedAt)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
@@ -60,5 +66,6 @@ object RealtimeConfirmNotifier {
 
     const val ACTION_CONFIRM_CLIENT = "com.plumberdiary.app.action.CONFIRM_CLIENT"
     const val EXTRA_CLIENT_ID = "extra_client_id"
+    const val EXTRA_STOP_ID = "extra_stop_id"
     const val EXTRA_STOP_STARTED_AT = "extra_stop_started_at"
 }

@@ -1,4 +1,4 @@
-// PlumberDiaryNavHost.kt — v1.11.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-24: BackendConfig; v1.1.0 — 2026-09-20 00:30 UTC)
+// PlumberDiaryNavHost.kt — v1.12.0 — 2026-09-29 (v1.11.0 — 2026-09-29; v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-24: BackendConfig; v1.1.0 — 2026-09-20 00:30 UTC)
 package com.plumberdiary.app.ui
 
 import androidx.compose.runtime.Composable
@@ -9,9 +9,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.google.firebase.auth.FirebaseAuth
 import com.plumberdiary.app.data.BackendConfig
 import com.plumberdiary.app.data.model.UserSettings
@@ -75,12 +77,16 @@ object Routes {
     // v1.11.0 — 2026-09-29: il rapportino è lo stesso documento del mandatino.
     // Prima: const val RAPPORTINO = "rapportino/{stopId}"
     const val MANDATINO = "mandatino/{clientId}"
-    const val NOTIFICA_CONFERMA = "notifica_conferma/{clientId}"
+    // v1.12.0 — 2026-09-29: + stopId opzionale, la sosta a cui si riferiva la
+    // notifica. Prima: const val NOTIFICA_CONFERMA = "notifica_conferma/{clientId}"
+    const val NOTIFICA_CONFERMA = "notifica_conferma/{clientId}?stopId={stopId}"
 
     fun dettaglio(stopId: String) = "dettaglio/$stopId"
     fun cliente(clientId: String) = "cliente/$clientId"
     fun mandatino(clientId: String) = "mandatino/$clientId"
-    fun notificaConferma(clientId: String) = "notifica_conferma/$clientId"
+    // Prima: fun notificaConferma(clientId: String) = "notifica_conferma/$clientId"
+    fun notificaConferma(clientId: String, stopId: String? = null) =
+        if (stopId.isNullOrBlank()) "notifica_conferma/$clientId" else "notifica_conferma/$clientId?stopId=$stopId"
 }
 
 // v1.7.0 — 2026-09-24: l'URL del deploy Vercel vive ora in
@@ -184,8 +190,15 @@ fun PlumberDiaryNavHost(
         composable(Routes.MANDATINO) { backStackEntry ->
             MandatinoScreen(navController, clientId = backStackEntry.arguments?.getString("clientId").orEmpty())
         }
-        composable(Routes.NOTIFICA_CONFERMA) { backStackEntry ->
-            NotificaConfermaScreen(navController, clientId = backStackEntry.arguments?.getString("clientId").orEmpty())
+        composable(
+            Routes.NOTIFICA_CONFERMA,
+            arguments = listOf(navArgument("stopId") { type = NavType.StringType; nullable = true; defaultValue = null }),
+        ) { backStackEntry ->
+            NotificaConfermaScreen(
+                navController,
+                clientId = backStackEntry.arguments?.getString("clientId").orEmpty(),
+                stopId = backStackEntry.arguments?.getString("stopId"),
+            )
         }
     }
 }

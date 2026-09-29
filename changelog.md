@@ -131,3 +131,34 @@ Correzione del mandatino dopo il chiarimento dell'utente: si compila **sul posto
 - **rimossi** `RapportinoScreen`, `RapportinoPdfGenerator` e la route `rapportino/{stopId}`; dalla scheda cliente è stata spostata la vecchia finestra di conferma;
 - aggiornati i requisiti 9 e 15 in `context.md`, il manuale, `SETUP.md` e `app/README.md`.
 
+## 1.12.0 — 2026-09-29 11:38 UTC
+**Correzioni della review completa della 1.11.0.** Codice non ancora compilato (manca l'SDK Android in questo ambiente); il nuovo raggruppamento GPS è coperto da 5 test JVM, eseguiti con successo.
+
+Bloccanti:
+- **Inviti**: il codice mostrato e copiato è ora completo (`<squadra>.<codice>`) e basta da solo per unirsi. Prima servivano anche l'ID squadra, che nessuna schermata mostrava: il collega invitato non poteva entrare. (`create-invite.js`, `accept-invite.js`, `_lib/ids.js`, `TeamSelectionScreen`, `BackendClient`)
+- **Mandatino dal Dettaglio**: il pulsante salva la sosta (cliente incluso) prima di aprire il mandatino; prima, con un cliente appena scelto o creato, il mandatino risultava vuoto.
+- **Mail di recap**: ora riporta per ogni sosta cliente (o sede/pausa/da associare), orario, durata, note, promemoria, materiali e i totali del giorno; prima mancava il cliente e la colonna Posizione era sempre vuota.
+- **Indici Firestore**: rimossi i due indici a campo singolo dichiarati come composti, che facevano fallire `firebase deploy`; aggiunto l'indice collection group su `members.uid`.
+
+Importanti:
+- Gli endpoint email spediscono solo a indirizzi salvati sul server (email del cliente in anagrafica, email amministrazione nelle Opzioni), con quote di 50 mandatini e 20 recap al giorno per utente; testi dell'utente escaped nell'HTML; id validati prima di comporre i percorsi Firestore.
+- Tracciamento: la precisione del fix GPS è considerata e uno spostamento va confermato da due fix consecutivi, così un fix impreciso non spezza più le soste (`StopClusterer`, test in `app/src/test`).
+- Dopo un riavvio del telefono il tracciamento riparte solo se era acceso (`SessionStore.trackingEnabled`); controllo del permesso di posizione al boot.
+- La notifica "Sei da…?" porta l'id della sosta: la conferma va sulla sosta notificata, non su quella aperta al momento del tocco.
+- Mandatino: alla conferma le proprie soste incluse per posizione vengono associate al cliente; l'email corretta sul posto viene salvata in anagrafica prima dell'invio.
+- Nuovo endpoint `my-teams` e sezione "Le tue squadre": rientro nelle proprie squadre dopo logout, reinstallazione o cambio telefono.
+- Foto: orientamento EXIF applicato alla copia display e decodifica ridotta (niente più foto ruotate né crash per memoria); nuova dipendenza `androidx.exifinterface`.
+- Le copie HD delle foto non vengono più cancellate subito dopo l'invio del recap (il reinvio arrivava senza foto): le elimina il cleanup dopo 7 giorni. Il cleanup cancella anche le foto delle soste scadute.
+
+Minori:
+- Dashboard: "Ore presso clienti" e km sommati giorno per giorno.
+- Notifica di recap: sede e pause non contano fra le soste da rivedere.
+- "Conferma recap" non segna come confermata la sosta ancora in corso.
+- Dettaglio: l'inizio di una sosta in corso non è più modificabile (la modifica andava persa).
+- Condivisione posizione spenta → i colleghi vedono il tecnico offline (campo rinominato `shareOwnLocationEnabled`).
+- Barra delle schede senza duplicati nello storico di navigazione.
+- Logout: attesa (max 5 s) delle scritture in coda prima dell'uscita, così la sosta aperta viene chiusa.
+- Aggiunto il Gradle wrapper (Gradle 8.9).
+- Documentazione: `context.md`, `manual.md`, `SETUP.md`, `backend/README.md`.
+
+Decisioni aperte: Firebase Storage e piano Blaze; licenza AGPL di iText.

@@ -1,6 +1,6 @@
 # backend — Plumber Diary (Vercel Functions)
 
-Versione: 1.0.0 — 2026-09-20 00:10 UTC
+Versione: 1.12.0 — 2026-09-29 11:38 UTC (v1.0.0 — 2026-09-20 00:10 UTC)
 
 Stack a costo zero, identico nell'impostazione a quello già in produzione nel
 progetto gemello `chicco83/gwatch-child-tracker` (vedi `context.md` nella
@@ -19,11 +19,12 @@ radice del repo per il ragionamento completo):
 | Endpoint | Autenticazione | Scopo |
 |---|---|---|
 | `POST /api/create-team` | ID token Firebase | Crea una squadra e vi iscrive il creatore |
-| `POST /api/create-invite` | ID token Firebase (membro) | Genera un codice di invito a scadenza |
-| `POST /api/accept-invite` | ID token Firebase | Unico punto in cui un utente entra in una squadra |
-| `POST /api/send-recap-email` | ID token Firebase (membro) | Requisito 6/12: recap giornaliero con foto in alta risoluzione |
-| `POST /api/send-mandatino` | ID token Firebase (membro) | Requisito 9: invia il mandatino ore PDF già generato lato client |
-| `POST /api/cleanup` | Token statico `x-cleanup-token` | Retention posizioni, foto originali scadute, inviti, quote |
+| `POST /api/create-invite` | ID token Firebase (membro) | Genera un codice di invito a scadenza; restituisce il codice completo `<teamId>.<codice>` (v1.12.0) |
+| `POST /api/accept-invite` | ID token Firebase | Unico punto in cui un utente entra in una squadra; accetta `invite` (codice completo) o `teamId`+`inviteCode` |
+| `POST /api/my-teams` | ID token Firebase | Squadre di cui l'utente è già membro (v1.12.0, rientro dopo logout/cambio telefono) |
+| `POST /api/send-recap-email` | ID token Firebase (membro) | Requisito 6/12: recap giornaliero con foto in alta risoluzione; destinatario dalle Opzioni salvate; max 20/giorno per utente |
+| `POST /api/send-mandatino` | ID token Firebase (membro) | Requisito 9: invia il mandatino PDF già generato lato client, **solo** all'email del cliente in anagrafica; max 50/giorno per utente |
+| `POST /api/cleanup` | Token statico `x-cleanup-token` | Retention posizioni (con le loro foto), foto originali oltre 7 giorni, inviti, quote |
 
 ## Variabili d'ambiente richieste (Vercel → Settings → Environment Variables)
 

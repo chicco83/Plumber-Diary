@@ -1,4 +1,4 @@
-// SquadraScreen.kt — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-23)
+// SquadraScreen.kt — v1.12.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-23)
 //
 // Versione precedente (v1.0.0 — 2026-09-20 00:10 UTC): stub con mappa fissa su
 // Bologna e nessun marker, sostituita il 2026-09-23 dall'implementazione reale
@@ -203,7 +203,10 @@ fun SquadraScreen(navController: NavHostController) {
                     ) { Text("Genera codice invito") }
                     inviteCode?.let { code ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Codice: $code (valido 7 giorni)", modifier = Modifier.weight(1f))
+                            // v1.12.0 — 2026-09-29: il backend restituisce ora il codice completo
+                            // "squadra.codice", l'unico dato che serve al collega per unirsi.
+                            // Prima: Text("Codice: $code (valido 7 giorni)", ...)
+                            Text("Codice: $code (valido 7 giorni, da incollare in \"Unisciti\")", modifier = Modifier.weight(1f))
                             OutlinedButton(onClick = {
                                 val cm = context.getSystemService(android.content.ClipboardManager::class.java)
                                 cm.setPrimaryClip(android.content.ClipData.newPlainText("Invito squadra", code))

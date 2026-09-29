@@ -1,10 +1,11 @@
-// RecapWorker.kt — v1.8.0 — 2026-09-29
+// RecapWorker.kt — v1.12.0 — 2026-09-29 (v1.8.0 — 2026-09-29)
 package com.plumberdiary.app.recap
 
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.google.firebase.auth.FirebaseAuth
+import com.plumberdiary.app.data.model.StopKind
 import com.plumberdiary.app.data.repository.StopRepository
 import com.plumberdiary.app.notification.RecapNotifier
 import com.plumberdiary.app.session.SessionStore
@@ -34,7 +35,10 @@ class RecapWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
 
         val toReview = try {
             StopRepository().getStopsForDay(teamId, uid, dayStart, System.currentTimeMillis())
-                .count { !it.confirmedInRecap }
+                // v1.12.0 — 2026-09-29: sede e pause non sono "da rivedere" (prima
+                // la notifica partiva anche con la sola sosta in sede). Prima:
+                // .count { !it.confirmedInRecap }
+                .count { !it.confirmedInRecap && it.kind != StopKind.DEPOT && it.kind != StopKind.BREAK }
         } catch (e: Exception) {
             return Result.retry()
         }

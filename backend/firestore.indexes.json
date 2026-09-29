@@ -1,19 +1,13 @@
 {
-  "indexes": [
+  "indexes": [],
+  "fieldOverrides": [
     {
-      "collectionGroup": "stops",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "startedAt", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "stops",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "endedAt", "order": "ASCENDING" }
+      "collectionGroup": "members",
+      "fieldPath": "uid",
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" },
+        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
       ]
     }
-  ],
-  "fieldOverrides": []
+  ]
 }

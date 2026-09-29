@@ -1,6 +1,6 @@
 # SETUP — Plumber Diary (configurazioni manuali)
 
-Versione: 1.11.0 — 2026-09-29 (v1.10.0 / v1.9.0 / v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-24)
+Versione: 1.12.0 — 2026-09-29 11:38 UTC (v1.11.0 / v1.10.0 / v1.9.0 / v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-24)
 
 Tutto quello che va fatto **fuori dal codice** per portare l'app in piedi: progetto
 Firebase, regole di sicurezza, deploy Vercel del backend e primo build Android.
@@ -20,7 +20,7 @@ dipende quasi solo dai tempi di creazione dei progetti.
 | Android Studio (con SDK 35) | build e run dell'app | developer.android.com/studio |
 | JDK 17 | Gradle del progetto (`app/build.gradle.kts`) | incluso in Android Studio |
 | Node.js 18+ | firebase CLI (solo per il deploy delle regole) | nodejs.org |
-| Account Google + account Firebase | piano Spark, gratuito, nessuna carta | console.firebase.google.com |
+| Account Google + account Firebase | piano Spark, gratuito, nessuna carta — ⚠️ per Firebase Storage nei progetti nuovi Google chiede il piano Blaze (decisione aperta, vedi `context.md`) | console.firebase.google.com |
 | Account Vercel | piano Hobby, gratuito, nessuna carta | vercel.com |
 | `firebase-tools` installato | `npm install -g firebase-tools` | — |
 
@@ -75,10 +75,14 @@ firebase deploy               # pubblica firestore.rules + indexes + storage.rul
   `accept-invite` con Admin SDK può crearla) — non "correggere" questa regola.
 - `storage.rules` (nuovo in v1.7.0): foto clienti condivise, foto interventi
   scrivibili solo dal proprietario della sosta.
-- `firestore.indexes.json`: indici semplici su `stops.startedAt`/`endedAt`
-  (le query dell'app usano range+orderBy sullo stesso campo: non servono indici
-  compositi; se in fase di test Firestore segnalasse un indice mancante, la
-  console te lo propone con un link "Create" — cliccare e ri-deployare).
+- `firestore.indexes.json` (v1.12.0): **nessun indice composto** — le query
+  dell'app usano range+orderBy sullo stesso campo, coperte dagli indici
+  automatici. Prima il file dichiarava due indici a campo singolo come
+  composti e `firebase deploy` li rifiutava ("this index is not necessary").
+  Resta solo un `fieldOverrides` su `members.uid` in ambito *collection group*,
+  necessario all'endpoint `my-teams` (rientro nelle proprie squadre). Se in
+  fase di test Firestore segnalasse un indice mancante, la console lo propone
+  con un link "Create" — cliccare e ri-deployare.
 
 ## Passo 3 — Backend Vercel
 
@@ -99,7 +103,7 @@ firebase deploy               # pubblica firestore.rules + indexes + storage.rul
    | `FIREBASE_PROJECT_ID` | campo `project_id` della chiave |
    | `FIREBASE_CLIENT_EMAIL` | campo `client_email` |
    | `FIREBASE_PRIVATE_KEY` | campo `private_key` — **conserva gli `\n` letterali** (Vercel non accetta a capo reali; il codice in `_lib/firebase-admin.js` li ricodifica) |
-   | `FIREBASE_STORAGE_BUCKET` | campo `storageBucket` (es. `plumber-diary.appspot.com`) |
+   | `FIREBASE_STORAGE_BUCKET` | campo `storageBucket` (nei progetti creati dopo ottobre 2024 è `<project-id>.firebasestorage.app`; nei vecchi `<project-id>.appspot.com`) |
    | `SMTP_HOST` | es. `smtp.gmail.com` |
    | `SMTP_PORT` | `587` |
    | `SMTP_USER` | la tua email Gmail completa |
@@ -129,6 +133,8 @@ leggono da qui: non cercare più stringhe `vercel.app` sparse.
 ## Passo 5 — Build e primo run (Android Studio)
 
 1. Apri la cartella del repo in Android Studio → *Open* → attendi il **Gradle sync**
+   (dalla 1.12.0 il repo include il **Gradle wrapper**, Gradle 8.9: da riga di
+   comando `./gradlew :app:assembleDebug` e `./gradlew :app:testDebugUnitTest`)
    (al primo sync scarica tutte le dipendenze, tra cui la nuova `coil-compose` per
    le miniature foto).
 2. Seleziona un dispositivo: **serve un device/emulator con API 26+** e, per il
@@ -210,6 +216,9 @@ controllando la Console Storage.
 | Notifica "Sei da…" non arriva mai | permesso notifiche negato (Android 13+), soglia non superata, posizione su sede/pausa, nessun cliente noto in quel punto, oppure già notificata per quella sosta (parte una volta sola) | concedi le notifiche dalla Home; controlla Opzioni (soglia, sede, pause) |
 | Upload foto rifiutato | `storage.rules` non pubblicate, o file non immagine / oltre 25 MB | passo 2: `firebase deploy` |
 | Recap email: "Invio recap fallito" | SMTP non configurato o App Password scaduta | passo 3.2; le App Password Gmail si rigenerano in *Password app* |
+| "Unisciti": codice invito non valido | incollato solo un pezzo del codice | il codice completo ha la forma `squadra.codice`: usa *Copia* in Squadra/Opzioni |
+| "Le tue squadre" non compare dopo il login | indice `members.uid` (collection group) non pubblicato | passo 2: `firebase deploy` |
+| Mandatino: "non coincide con quella in anagrafica" | email modificata ma non salvata sul cliente | riprova dalla schermata Mandatino (salva l'email prima di inviare) |
 
 ## Prossimi step (già documentati nel codice)
 

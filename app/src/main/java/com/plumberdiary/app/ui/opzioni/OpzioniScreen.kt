@@ -1,4 +1,4 @@
-// OpzioniScreen.kt — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-23)
+// OpzioniScreen.kt — v1.12.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-23)
 //
 // Versione precedente (v1.0.0 — 2026-09-20 00:10 UTC): stub con solo il titolo,
 // sostituita il 2026-09-23 dalla schermata completa: tutte le UserSettings
@@ -44,6 +44,10 @@ import com.plumberdiary.app.data.BackendConfig
 import com.plumberdiary.app.data.model.ScheduledBreak
 import com.plumberdiary.app.data.model.UserSettings
 import com.plumberdiary.app.data.repository.SettingsRepository
+import com.plumberdiary.app.data.repository.TeamRepository
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import com.plumberdiary.app.location.LocationTrackingService
 import com.plumberdiary.app.recap.RecapScheduler
 import com.plumberdiary.app.session.CurrentSession
@@ -171,7 +175,9 @@ fun OpzioniScreen(navController: NavHostController) {
                 ElevatedCard(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                     Column(Modifier.padding(12.dp)) {
                         SectionTitle("Squadra")
-                        SwitchRow("Condividi la mia posizione live sulla mappa", s.seeTeamLocationEnabled) { checked -> update { it.copy(seeTeamLocationEnabled = checked) } }
+                        // v1.12.0 — 2026-09-29: campo rinominato (vedi UserSettings). Prima:
+                        // SwitchRow("Condividi la mia posizione live sulla mappa", s.seeTeamLocationEnabled) { checked -> update { it.copy(seeTeamLocationEnabled = checked) } }
+                        SwitchRow("Condividi la mia posizione live sulla mappa", s.shareOwnLocationEnabled) { checked -> update { it.copy(shareOwnLocationEnabled = checked) } }
                         SwitchRow("Vedi i recap confermati dei colleghi (nello Storico, default OFF)", s.seeTeammatesRecapEnabled) { checked -> update { it.copy(seeTeammatesRecapEnabled = checked) } }
                         Button(onClick = {
                             if (session == null) return@Button
@@ -182,7 +188,9 @@ fun OpzioniScreen(navController: NavHostController) {
                         }) { Text("Genera codice invito per un collega") }
                         inviteCode?.let { code ->
                             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                                Text("Codice: $code", modifier = Modifier.weight(1f))
+                                // v1.12.0 — 2026-09-29: il codice è ora completo (squadra.codice):
+                                // basta questo al collega per unirsi.
+                                Text("Codice: $code (valido 7 giorni, da incollare in \"Unisciti\")", modifier = Modifier.weight(1f))
                                 OutlinedButton(onClick = {
                                     val cm = context.getSystemService(android.content.ClipboardManager::class.java)
                                     cm.setPrimaryClip(android.content.ClipData.newPlainText("Invito squadra", code))
@@ -227,6 +235,9 @@ fun OpzioniScreen(navController: NavHostController) {
                                 }
                                 val saved = s.copy(depotLat = lat, depotLon = lon)
                                 settingsRepository.save(session.teamId, session.uid, saved)
+                                // v1.12.0 — 2026-09-29: condivisione spenta → i colleghi non
+                                // vedono più il marker (prima restava "Attivo" fermo nel tempo).
+                                if (!saved.shareOwnLocationEnabled) TeamRepository().markOffline(session.teamId, session.uid)
                                 // v1.8.0 — 2026-09-29: il nuovo orario del recap serale
                                 // entra in vigore subito (prima non c'era programmazione).
                                 RecapScheduler.schedule(context, saved.recapTimeHour, saved.recapTimeMinute, reschedule = true)
@@ -244,6 +255,15 @@ fun OpzioniScreen(navController: NavHostController) {
                             // logout (e al fix successivo il service andava in crash senza
                             // sessione); ora si ferma, e si annulla il recap serale.
                             context.stopService(Intent(context, LocationTrackingService::class.java))
+                            // v1.12.0 — 2026-09-29: il service chiude la sosta aperta in
+                            // onDestroy con scritture non attese; facendo subito signOut
+                            // quelle scritture restavano in coda all'utente uscito e la
+                            // sosta risultava "in corso" per sempre. Si attende (max 5 s)
+                            // che partano, poi si esce.
+                            withTimeoutOrNull(5_000) {
+                                delay(500) // lascia arrivare onDestroy del service
+                                FirebaseFirestore.getInstance().waitForPendingWrites().await()
+                            }
                             RecapScheduler.cancel(context)
                             AuthRepository(context).signOut()
                             SessionStore(context).clear()

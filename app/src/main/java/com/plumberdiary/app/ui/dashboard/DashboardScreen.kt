@@ -1,4 +1,4 @@
-// DashboardScreen.kt — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-23)
+// DashboardScreen.kt — v1.12.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-23)
 //
 // Versione precedente (v1.0.0 — 2026-09-20 00:10 UTC): stub con solo il titolo,
 // sostituita il 2026-09-23 dall'implementazione (requisito 17): ore totali, km
@@ -65,8 +65,16 @@ fun DashboardScreen(navController: NavHostController) {
             val stops = StopRepository().getStopsForDay(session.teamId, session.uid, monthStart, System.currentTimeMillis())
                 .filter { it.endedAt > 0L }
                 .sortedBy { it.startedAt }
-            totalMinutes = stops.sumOf { Format.durationMinutes(it.startedAt, it.endedAt) }
-            totalKm = DailyDistanceCalculator.totalKm(DailyDistanceCalculator.withDistances(stops))
+            // v1.12.0 — 2026-09-29: "Ore" = ore presso clienti. Prima sommava anche
+            // sede, pause e soste senza cliente, gonfiando il totale; e i km erano
+            // calcolati sull'intero mese in sequenza, includendo il salto fra
+            // l'ultima sosta di un giorno e la prima del successivo. Prima:
+            // totalMinutes = stops.sumOf { Format.durationMinutes(it.startedAt, it.endedAt) }
+            // totalKm = DailyDistanceCalculator.totalKm(DailyDistanceCalculator.withDistances(stops))
+            totalMinutes = stops.filter { it.clientId != null }.sumOf { Format.durationMinutes(it.startedAt, it.endedAt) }
+            val dayKey = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ITALY)
+            totalKm = stops.groupBy { dayKey.format(java.util.Date(it.startedAt)) }.values
+                .sumOf { day -> DailyDistanceCalculator.totalKm(DailyDistanceCalculator.withDistances(day)) }
             totalMaterials = stops.sumOf { s -> s.articleLines.sumOf { it.unitPrice * it.quantity } }
             interventions = stops.count { it.kind == StopKind.CLIENT || it.clientId != null }
 
@@ -93,7 +101,7 @@ fun DashboardScreen(navController: NavHostController) {
         }
 
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-            StatTile("Ore", Format.durationLabel(totalMinutes), Modifier.weight(1f))
+            StatTile("Ore presso clienti", Format.durationLabel(totalMinutes), Modifier.weight(1f))
             StatTile("Km percorsi", Format.km(totalKm * 1000), Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth()) {

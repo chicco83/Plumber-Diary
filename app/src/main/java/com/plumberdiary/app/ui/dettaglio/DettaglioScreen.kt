@@ -1,4 +1,4 @@
-// DettaglioScreen.kt — v1.11.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-23)
+// DettaglioScreen.kt — v1.12.0 — 2026-09-29 (v1.11.0 — 2026-09-29; v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-23)
 //
 // Versione precedente (v1.0.0 — 2026-09-20 00:10 UTC): stub con solo il titolo,
 // sostituita il 2026-09-23 dal form completo di una singola sosta (requisiti
@@ -92,6 +92,19 @@ fun DettaglioScreen(navController: NavHostController, stopId: String) {
         } catch (e: Exception) { saveMessage = e.message }
     }
 
+    /**
+     * v1.12.0 — 2026-09-29: salvataggio comune a "Salva modifiche" e al
+     * pulsante "Mandatino". Solo i campi dell'utente; gli orari solo se la
+     * sosta è chiusa (per quella in corso sono del service).
+     */
+    suspend fun persist(s: Stop) {
+        val active = session ?: return
+        stopRepository.saveUserEdits(active.teamId, active.uid, s, includeTimes = true)
+        s.clientId?.let { clientId ->
+            clientRepository.recordVisit(active.teamId, clientId, s.lat, s.lon, System.currentTimeMillis())
+        }
+    }
+
     val photoLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(4),
     ) { uris ->
@@ -142,13 +155,22 @@ fun DettaglioScreen(navController: NavHostController, stopId: String) {
                     Text("Orari", style = MaterialTheme.typography.titleMedium)
                     // v1.8.0 — 2026-09-29: l'inizio non può superare la fine (e
                     // viceversa); prima si potevano salvare durate negative.
-                    TimeStepper(
-                        label = "Inizio",
-                        valueMillis = current.startedAt,
-                        onValueChange = {
-                            if (current.endedAt == 0L || it < current.endedAt) stop = current.copy(startedAt = it)
-                        },
-                    )
+                    // v1.12.0 — 2026-09-29: per una sosta in corso l'inizio non è
+                    // modificabile. Prima lo stepper c'era, ma saveUserEdits scrive gli
+                    // orari solo a sosta chiusa (li gestisce il service): la modifica
+                    // veniva persa pur mostrando "Salvato.". Prima:
+                    // TimeStepper(label = "Inizio", valueMillis = current.startedAt, onValueChange = {
+                    //     if (current.endedAt == 0L || it < current.endedAt) stop = current.copy(startedAt = it)
+                    // })
+                    if (current.endedAt > 0L) {
+                        TimeStepper(
+                            label = "Inizio",
+                            valueMillis = current.startedAt,
+                            onValueChange = { if (it < current.endedAt) stop = current.copy(startedAt = it) },
+                        )
+                    } else {
+                        Text("Inizio ${Format.time(current.startedAt)} (correggibile a sosta conclusa)")
+                    }
                     if (current.endedAt > 0L) {
                         TimeStepper(
                             label = "Fine",
@@ -193,7 +215,21 @@ fun DettaglioScreen(navController: NavHostController, stopId: String) {
                             }
                             // v1.11.0 — 2026-09-29: mandatino da far firmare sul posto,
                             // raggiungibile direttamente dalla sosta in corso.
-                            TextButton(onClick = { navController.navigate(Routes.mandatino(current.clientId!!)) }) {
+                            // v1.12.0 — 2026-09-29: prima di aprire il mandatino si SALVA la
+                            // sosta. Il cliente scelto qui restava solo sullo schermo fino a
+                            // "Salva modifiche": il mandatino leggeva da Firestore una sosta
+                            // senza cliente e, con un cliente nuovo (nessuna posizione nota),
+                            // risultava vuoto — proprio nel caso tipico sul posto. Prima:
+                            // TextButton(onClick = { navController.navigate(Routes.mandatino(current.clientId!!)) })
+                            TextButton(onClick = {
+                                val clientId = current.clientId ?: return@TextButton
+                                scope.launch {
+                                    try {
+                                        persist(current)
+                                        navController.navigate(Routes.mandatino(clientId))
+                                    } catch (e: Exception) { saveMessage = "Salvataggio non riuscito: ${e.message}" }
+                                }
+                            }) {
                                 Text("Mandatino")
                             }
                             TextButton(onClick = { stop = current.copy(clientId = null, kind = StopKind.UNRESOLVED) }) {
@@ -315,10 +351,11 @@ fun DettaglioScreen(navController: NavHostController, stopId: String) {
                             // v1.8.0 — 2026-09-29: solo i campi dell'utente, orari
                             // inclusi (qui sono una correzione manuale); prima upsert
                             // dell'intero documento, in conflitto con il service.
-                            stopRepository.saveUserEdits(session.teamId, session.uid, s, includeTimes = true)
-                            s.clientId?.let { clientId ->
-                                clientRepository.recordVisit(session.teamId, clientId, s.lat, s.lon, System.currentTimeMillis())
-                            }
+                            // v1.12.0 — 2026-09-29: logica spostata in persist(), usata
+                            // anche dal pulsante Mandatino. Prima qui:
+                            // stopRepository.saveUserEdits(session.teamId, session.uid, s, includeTimes = true)
+                            // s.clientId?.let { clientRepository.recordVisit(...) }
+                            persist(s)
                             saveMessage = "Salvato."
                         } catch (e: Exception) { saveMessage = e.message }
                     }

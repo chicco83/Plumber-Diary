@@ -1,4 +1,4 @@
-// LocationTrackingService.kt — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-23/24: sosta aperta persistita, classifyKind, realtimeDismissedAt; v1.0.0 — 2026-09-20)
+// LocationTrackingService.kt — v1.12.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-23/24: sosta aperta persistita, classifyKind, realtimeDismissedAt; v1.0.0 — 2026-09-20)
 package com.plumberdiary.app.location
 
 import android.Manifest
@@ -74,6 +74,13 @@ import java.util.concurrent.TimeUnit
  *    aperta da un kill del processo viene chiusa al riavvio se "scaduta";
  *  - nessuna eccezione può più far crashare il processo (prima bastava un
  *    errore di rete o il logout con il service attivo).
+ *
+ * v1.12.0 — 2026-09-29:
+ *  - campionamento breve anche quando [StopClusterer] ha un'uscita in attesa
+ *    di conferma (fix imprecisi non spezzano più le soste, vedi StopClusterer);
+ *  - "Condividi la mia posizione" spento: la posizione live viene segnata
+ *    OFFLINE una volta, invece di lasciare ai colleghi l'ultimo marker
+ *    "Attivo" fermo nel tempo (campo rinominato shareOwnLocationEnabled).
  */
 class LocationTrackingService : Service() {
 
@@ -113,6 +120,10 @@ class LocationTrackingService : Service() {
 
     private var cachedSettings: UserSettings? = null
     private var settingsLoadedAt = 0L
+
+    // v1.12.0 — 2026-09-29: posizione live già segnata OFFLINE perché la
+    // condivisione è spenta (una sola scrittura, non a ogni fix).
+    private var liveHidden = false
 
     private var started = false
     private var currentIntervalMillis = LONG_INTERVAL_MILLIS
@@ -270,12 +281,12 @@ class LocationTrackingService : Service() {
         val settings = settings(active)
 
         val closedStop = clusterer.onFix(fix)
-        if (closedStop != null) {
-            finalizeStop(active, closedStop, settings)
-            adjustSamplingInterval(moving = true)
-        } else {
-            adjustSamplingInterval(moving = false)
-        }
+        if (closedStop != null) finalizeStop(active, closedStop, settings)
+        // Versione precedente (v1.8.0 — 2026-09-29), sostituita il 2026-09-29:
+        // if (closedStop != null) { finalizeStop(...); adjustSamplingInterval(moving = true) }
+        // else adjustSamplingInterval(moving = false)
+        // Ora campionamento breve anche con un'uscita da confermare.
+        adjustSamplingInterval(moving = closedStop != null || clusterer.hasPendingExit())
 
         val open = clusterer.currentOpenStop() ?: return
         persistOpenStop(active, open, settings)
@@ -283,11 +294,17 @@ class LocationTrackingService : Service() {
         val openId = openStopId
         if (openId != null) checkThresholdForRealtimeConfirmation(active, openId, open, settings)
 
-        if (settings.seeTeamLocationEnabled) {
+        // Versione precedente (v1.8.0 — 2026-09-29), sostituita il 2026-09-29:
+        // if (settings.seeTeamLocationEnabled) { teamRepository.updateOwnLiveLocation(...) }
+        if (settings.shareOwnLocationEnabled) {
+            liveHidden = false
             teamRepository.updateOwnLiveLocation(
                 active.teamId, active.uid,
                 LiveLocation(lat = fix.lat, lon = fix.lon, updatedAt = fix.timestamp, status = MemberStatus.ACTIVE),
             )
+        } else if (!liveHidden) {
+            liveHidden = true
+            teamRepository.markOffline(active.teamId, active.uid)
         }
     }
 

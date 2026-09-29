@@ -1,15 +1,18 @@
-// PhotoUploader.kt — v1.8.0 — 2026-09-29 (v1.0.0 — 2026-09-20 00:10 UTC)
+// PhotoUploader.kt — v1.12.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.0.0 — 2026-09-20 00:10 UTC)
 package com.plumberdiary.app.photo
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.net.Uri
 import com.google.firebase.storage.FirebaseStorage
+import androidx.exifinterface.media.ExifInterface
 import com.google.firebase.storage.ktx.storageMetadata
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import kotlin.math.min
 
@@ -19,7 +22,9 @@ import kotlin.math.min
  *  - "display": compressa, conservata stabilmente, per la UI e la sync
  *    di squadra;
  *  - "original": alta risoluzione, SOLO per l'allegato email di recap,
- *    cancellata dal backend dopo l'invio riuscito (vedi backend/api/cleanup.js).
+ *    cancellata dal backend trascorsi 7 giorni dal caricamento (v1.12.0 —
+ *    2026-09-29: non più subito dopo l'invio, così un reinvio del recap ha
+ *    ancora l'HD; vedi backend/api/cleanup.js).
  *
  * L'immagine sorgente arriva dal Photo Picker di sistema
  * (ActivityResultContracts.PickMultipleVisualMedia), quindi come Uri di
@@ -79,17 +84,67 @@ class PhotoUploader(
         context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
             ?: error("Impossibile leggere la foto selezionata: $uri")
 
+    // Versione precedente (v1.0.0 — 2026-09-20), sostituita il 2026-09-29:
+    // 1) decodificava la foto a piena risoluzione (12 MP ≈ 48 MB di bitmap):
+    //    OutOfMemoryError sui telefoni economici;
+    // 2) ignorava l'orientamento EXIF: le foto scattate in verticale finivano
+    //    ruotate di 90° nelle miniature.
+    //
+    // private fun compress(originalBytes: ByteArray, maxLongSidePx: Int = 1600, quality: Int = 80): ByteArray {
+    //     val original = BitmapFactory.decodeByteArray(originalBytes, 0, originalBytes.size)
+    //     val scale = min(1f, maxLongSidePx.toFloat() / maxOf(original.width, original.height))
+    //     val resized = if (scale < 1f) Bitmap.createScaledBitmap(original, ...) else original
+    //     return ByteArrayOutputStream().use { resized.compress(Bitmap.CompressFormat.JPEG, quality, it); it.toByteArray() }
+    // }
     private fun compress(originalBytes: ByteArray, maxLongSidePx: Int = 1600, quality: Int = 80): ByteArray {
-        val original = BitmapFactory.decodeByteArray(originalBytes, 0, originalBytes.size)
-        val scale = min(1f, maxLongSidePx.toFloat() / maxOf(original.width, original.height))
+        // 1) Solo dimensioni, senza allocare il bitmap.
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(originalBytes, 0, originalBytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) error("Formato immagine non supportato")
+
+        // 2) Decodifica già ridotta di una potenza di 2, restando ≥ del lato richiesto.
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxLongSidePx) sample *= 2
+        val decoded = BitmapFactory.decodeByteArray(
+            originalBytes, 0, originalBytes.size,
+            BitmapFactory.Options().apply { inSampleSize = sample },
+        ) ?: error("Impossibile decodificare la foto")
+
+        // 3) Ridimensionamento fine al lato lungo richiesto.
+        val scale = min(1f, maxLongSidePx.toFloat() / maxOf(decoded.width, decoded.height))
         val resized = if (scale < 1f) {
-            Bitmap.createScaledBitmap(original, (original.width * scale).toInt(), (original.height * scale).toInt(), true)
+            Bitmap.createScaledBitmap(decoded, (decoded.width * scale).toInt(), (decoded.height * scale).toInt(), true)
         } else {
-            original
+            decoded
         }
+
+        // 4) Rotazione secondo l'EXIF (la copia "original" resta intatta, EXIF incluso).
+        val rotated = applyExifOrientation(resized, originalBytes)
+
         return ByteArrayOutputStream().use { stream ->
-            resized.compress(Bitmap.CompressFormat.JPEG, quality, stream)
+            rotated.compress(Bitmap.CompressFormat.JPEG, quality, stream)
             stream.toByteArray()
         }
+    }
+
+    private fun applyExifOrientation(bitmap: Bitmap, originalBytes: ByteArray): Bitmap {
+        val orientation = try {
+            ExifInterface(ByteArrayInputStream(originalBytes))
+                .getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+        } catch (_: Exception) {
+            ExifInterface.ORIENTATION_NORMAL
+        }
+        val matrix = Matrix()
+        when (orientation) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+            ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+            ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.preScale(-1f, 1f)
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.preScale(1f, -1f)
+            ExifInterface.ORIENTATION_TRANSPOSE -> { matrix.postRotate(90f); matrix.preScale(-1f, 1f) }
+            ExifInterface.ORIENTATION_TRANSVERSE -> { matrix.postRotate(270f); matrix.preScale(-1f, 1f) }
+            else -> return bitmap
+        }
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
 }

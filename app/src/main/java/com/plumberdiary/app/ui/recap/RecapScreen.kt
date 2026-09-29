@@ -1,4 +1,4 @@
-// RecapScreen.kt — v1.11.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-23)
+// RecapScreen.kt — v1.12.0 — 2026-09-29 (v1.11.0 — 2026-09-29; v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-23)
 //
 // Versione precedente (v1.0.0 — 2026-09-20 00:10 UTC): stub con solo il titolo
 // "Riepilogo giornata", sostituita il 2026-09-23 dall'implementazione reale:
@@ -85,16 +85,24 @@ fun RecapScreen(navController: NavHostController) {
 
     LaunchedEffect(Unit) { refresh() }
 
-    /** Invia il recap all'amministrazione se attivo nelle Opzioni; ritorna l'esito da mostrare. */
+    // Versione precedente (v1.8.0 — 2026-09-29), sostituita il 2026-09-29: passava
+    // l'indirizzo al backend, che lo usava senza verifiche.
+    //   else -> { backendClient.sendRecapEmail(teamId, dayStartMillis, ..., recipient); "Recap inviato a $recipient ..." }
+
+    /**
+     * Invia il recap all'amministrazione se attivo nelle Opzioni; ritorna l'esito
+     * da mostrare. v1.12.0 — 2026-09-29: il destinatario lo legge il backend
+     * dalle Opzioni salvate; qui si controlla solo che sia impostato, per un
+     * messaggio chiaro prima della chiamata.
+     */
     suspend fun sendRecapEmail(teamId: String, uid: String): String = try {
         val settings = settingsRepository.get(teamId, uid)
-        val recipient = settings.recapEmailAddress.trim()
         when {
             !settings.recapEmailEnabled -> "Invio recap via email disattivato nelle Opzioni."
-            recipient.isEmpty() -> "Invio recap fallito: manca l'email dell'amministrazione nelle Opzioni."
+            settings.recapEmailAddress.isBlank() -> "Invio recap fallito: manca l'email dell'amministrazione nelle Opzioni."
             else -> {
-                backendClient.sendRecapEmail(teamId, dayStartMillis, System.currentTimeMillis() + 60_000L, recipient)
-                "Recap inviato a $recipient (foto in alta risoluzione incluse)."
+                val sentTo = backendClient.sendRecapEmail(teamId, dayStartMillis, System.currentTimeMillis() + 60_000L)
+                "Recap inviato a ${sentTo.ifBlank { settings.recapEmailAddress.trim() }} (foto in alta risoluzione incluse)."
             }
         }
     } catch (e: Exception) {
@@ -207,7 +215,11 @@ fun RecapScreen(navController: NavHostController) {
                             // campi del service sulla sosta ancora aperta) e nessun invio
                             // della mail, che restava solo manuale.
                             try {
-                                val updated = stops.map { it.copy(confirmedInRecap = true) }
+                                // v1.12.0 — 2026-09-29: la sosta ancora in corso NON viene segnata
+                                // confermata (continua dopo la conferma e va rivista a fine
+                                // giornata); le sue note restano comunque salvate. Prima:
+                                // val updated = stops.map { it.copy(confirmedInRecap = true) }
+                                val updated = stops.map { if (it.endedAt > 0L) it.copy(confirmedInRecap = true) else it }
                                 for (s in updated) stopRepository.saveUserEdits(session.teamId, session.uid, s)
                                 // Aggiorna le posizioni note dei clienti confermati (requisito 4).
                                 for (s in updated) {

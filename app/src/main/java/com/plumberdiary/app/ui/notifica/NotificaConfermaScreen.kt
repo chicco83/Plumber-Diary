@@ -1,4 +1,4 @@
-// NotificaConfermaScreen.kt — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-24)
+// NotificaConfermaScreen.kt — v1.12.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-24)
 //
 // Versione precedente (v1.0.0 — 2026-09-20 00:10 UTC): stub con un solo
 // pulsante "Sì, confermo" che non scriveva nulla, sostituita il 2026-09-24
@@ -12,6 +12,12 @@
 // - "Non ora": imposta realtimeDismissedAt sul campo Stop, altrimenti il
 //   service ri-notificherebbe ad ogni fix finché la soglia resta superata.
 // In tutti i casi la sosta resta correggibile nel recap serale.
+//
+// v1.12.0 — 2026-09-29: si conferma la sosta indicata dalla notifica
+// ([stopId]), non quella aperta al momento del tocco: toccando la notifica
+// dopo essersi spostati, prima il cliente finiva sulla sosta sbagliata.
+// Senza stopId (notifiche create da versioni precedenti) resta il vecchio
+// comportamento.
 package com.plumberdiary.app.ui.notifica
 
 import androidx.compose.foundation.layout.Column
@@ -53,7 +59,8 @@ import com.plumberdiary.app.ui.common.rememberActiveSession
 import kotlinx.coroutines.launch
 
 @Composable
-fun NotificaConfermaScreen(navController: NavHostController, clientId: String) {
+// Prima: fun NotificaConfermaScreen(navController: NavHostController, clientId: String)
+fun NotificaConfermaScreen(navController: NavHostController, clientId: String, stopId: String? = null) {
     val scope = rememberCoroutineScope()
     val session = rememberActiveSession()
 
@@ -69,7 +76,12 @@ fun NotificaConfermaScreen(navController: NavHostController, clientId: String) {
         if (session == null) return@LaunchedEffect
         try {
             client = clientRepository.getById(session.teamId, clientId)
-            openStop = stopRepository.getOpenStop(session.teamId, session.uid)
+            // Prima: openStop = stopRepository.getOpenStop(session.teamId, session.uid)
+            openStop = if (!stopId.isNullOrBlank()) {
+                stopRepository.getStop(session.teamId, session.uid, stopId)
+            } else {
+                stopRepository.getOpenStop(session.teamId, session.uid)
+            }
         } catch (e: Exception) {
             message = e.message
         }
@@ -103,7 +115,11 @@ fun NotificaConfermaScreen(navController: NavHostController, clientId: String) {
                 Column(Modifier.padding(16.dp)) {
                     Text("Sei da ${c.name}?", style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(8.dp))
-                    Text("Fermo qui dalle ${Format.time(stop.startedAt)}")
+                    // Prima: Text("Fermo qui dalle ${Format.time(stop.startedAt)}")
+                    Text(
+                        if (stop.endedAt == 0L) "Fermo qui dalle ${Format.time(stop.startedAt)}"
+                        else "Sosta dalle ${Format.time(stop.startedAt)} alle ${Format.time(stop.endedAt)} (già conclusa)",
+                    )
                     if (c.phone.isNotBlank()) Text("Tel: ${c.phone}")
                     Text(c.defaultAddressLabel.ifBlank { "Posizione già nota da un intervento precedente" })
                 }

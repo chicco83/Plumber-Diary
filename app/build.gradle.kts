@@ -1,4 +1,4 @@
-// app/build.gradle.kts — v1.7.0 — 2026-09-24 (google-services condizionale, coil, icone estese; v1.0.0 — 2026-09-20 00:10 UTC)
+// app/build.gradle.kts — v1.12.0 — 2026-09-29 (v1.7.0 — 2026-09-24: google-services condizionale, coil, icone estese; v1.0.0 — 2026-09-20 00:10 UTC)
 //
 // Modulo Android dell'app Plumber Diary. Scelte principali (vedi context.md
 // per il ragionamento completo):
@@ -112,6 +112,9 @@ dependencies {
     // --- Caricamento immagini (minature delle foto "display" di Storage nelle
     //     schede Dettaglio/Cliente) — v1.7.0 2026-09-24 ---
     implementation("io.coil-kt:coil-compose:2.7.0")
+
+    // --- Orientamento EXIF delle foto (miniature non più ruotate) — v1.12.0 2026-09-29 ---
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
 
     // --- Google Calendar (promemoria dal recap) ---
     implementation("com.google.api-client:google-api-client-android:2.7.0")

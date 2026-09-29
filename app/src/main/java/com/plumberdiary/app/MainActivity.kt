@@ -1,4 +1,4 @@
-// MainActivity.kt — v1.8.0 — 2026-09-29 (v1.0.0 — 2026-09-20 00:10 UTC)
+// MainActivity.kt — v1.12.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.0.0 — 2026-09-20 00:10 UTC)
 package com.plumberdiary.app
 
 import android.content.Intent
@@ -54,10 +54,21 @@ class MainActivity : ComponentActivity() {
         routeFrom(intent)?.let { pendingRoute.value = it }
     }
 
-    private fun routeFrom(intent: Intent?): String? = when (intent?.action) {
-        RealtimeConfirmNotifier.ACTION_CONFIRM_CLIENT ->
-            intent.getStringExtra(RealtimeConfirmNotifier.EXTRA_CLIENT_ID)?.let { Routes.notificaConferma(it) }
-        RecapNotifier.ACTION_OPEN_RECAP -> Routes.RECAP
-        else -> null
+    // Versione precedente (v1.8.0 — 2026-09-29), sostituita il 2026-09-29: senza
+    // l'id della sosta la conferma andava sulla sosta aperta al momento del tocco.
+    // RealtimeConfirmNotifier.ACTION_CONFIRM_CLIENT ->
+    //     intent.getStringExtra(RealtimeConfirmNotifier.EXTRA_CLIENT_ID)?.let { Routes.notificaConferma(it) }
+    // v1.12.0 — 2026-09-29: intent reso non nullo in modo esplicito (lo smart cast
+    // da `intent?.action` a `intent` non è garantito dal compilatore Kotlin 1.9).
+    private fun routeFrom(intent: Intent?): String? {
+        val i = intent ?: return null
+        return when (i.action) {
+            RealtimeConfirmNotifier.ACTION_CONFIRM_CLIENT ->
+                i.getStringExtra(RealtimeConfirmNotifier.EXTRA_CLIENT_ID)?.let {
+                    Routes.notificaConferma(it, i.getStringExtra(RealtimeConfirmNotifier.EXTRA_STOP_ID))
+                }
+            RecapNotifier.ACTION_OPEN_RECAP -> Routes.RECAP
+            else -> null
+        }
     }
 }

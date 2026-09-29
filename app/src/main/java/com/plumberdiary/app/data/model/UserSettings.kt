@@ -1,4 +1,4 @@
-// UserSettings.kt — v1.0.0 — 2026-09-20 00:10 UTC
+// UserSettings.kt — v1.12.0 — 2026-09-29 (v1.0.0 — 2026-09-20 00:10 UTC)
 package com.plumberdiary.app.data.model
 
 /**
@@ -13,7 +13,12 @@ data class UserSettings(
     val realtimeConfirmationEnabled: Boolean = true, // requisito 14
     val recapEmailEnabled: Boolean = true,           // default ON, richiesto esplicitamente
     val recapEmailAddress: String = "",
-    val seeTeamLocationEnabled: Boolean = true,
+    // v1.12.0 — 2026-09-29: rinominato da seeTeamLocationEnabled. Il nome
+    // diceva "vedi la squadra" ma il campo ha sempre deciso se CONDIVIDERE la
+    // propria posizione live (LocationTrackingService). Nessun dato reale da
+    // migrare: il progetto Firebase non è ancora stato creato.
+    // val seeTeamLocationEnabled: Boolean = true,
+    val shareOwnLocationEnabled: Boolean = true,
     val seeTeammatesRecapEnabled: Boolean = false,   // default OFF, richiesto esplicitamente: dato sensibile
     val positionRetentionMonths: Int = 12,
     val depotLat: Double? = null,                    // requisito 13

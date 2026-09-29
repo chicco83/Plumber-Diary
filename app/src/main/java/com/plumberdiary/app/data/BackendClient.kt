@@ -1,4 +1,4 @@
-// BackendClient.kt — v1.7.0 — 2026-09-23 (sendRecapEmail, sendMandatino; v1.0.0 — 2026-09-20 00:30 UTC)
+// BackendClient.kt — v1.12.0 — 2026-09-29 (v1.7.0 — 2026-09-23: sendRecapEmail, sendMandatino; v1.0.0 — 2026-09-20 00:30 UTC)
 package com.plumberdiary.app.data
 
 import com.plumberdiary.app.auth.AuthRepository
@@ -41,31 +41,66 @@ class BackendClient(
         return response.getString("inviteCode")
     }
 
-    suspend fun acceptInvite(teamId: String, inviteCode: String) {
-        post("accept-invite", JSONObject().put("teamId", teamId).put("inviteCode", inviteCode))
+    // Versione precedente (v1.0.0 — 2026-09-20), sostituita il 2026-09-29: servivano
+    // ID squadra e codice separati, ma l'ID squadra non era visibile in nessuna
+    // schermata e l'invitato non poteva unirsi.
+    // suspend fun acceptInvite(teamId: String, inviteCode: String) {
+    //     post("accept-invite", JSONObject().put("teamId", teamId).put("inviteCode", inviteCode))
+    // }
+
+    /**
+     * v1.12.0 — 2026-09-29: [invite] è il codice completo "<teamId>.<codice>"
+     * mostrato da Squadra/Opzioni (vedi backend/api/_lib/ids.js). Ritorna il teamId.
+     */
+    suspend fun acceptInvite(invite: String): String {
+        val response = post("accept-invite", JSONObject().put("invite", invite.trim()))
+        return response.getString("teamId")
+    }
+
+    data class TeamSummary(val teamId: String, val name: String)
+
+    /**
+     * v1.12.0 — 2026-09-29: squadre di cui l'utente è già membro, per rientrarci
+     * dopo logout, reinstallazione o cambio telefono senza un nuovo invito.
+     */
+    suspend fun myTeams(): List<TeamSummary> {
+        val array = post("my-teams", JSONObject()).optJSONArray("teams") ?: return emptyList()
+        return (0 until array.length()).map { i ->
+            val t = array.getJSONObject(i)
+            TeamSummary(teamId = t.getString("teamId"), name = t.optString("name"))
+        }
     }
 
     // v1.7.0 — 2026-09-23: i due endpoint di invio email (requisiti 6/12 e 9)
     // erano documentati in backend/README ma non ancora raggiungibili dall'app.
 
-    /** Requisito 6/12: recap giornaliero con foto HD a [recipientEmail]. */
-    suspend fun sendRecapEmail(
-        teamId: String,
-        dayStartMillis: Long,
-        dayEndMillis: Long,
-        recipientEmail: String,
-    ) {
-        post(
+    // Versione precedente (v1.7.0 — 2026-09-23), sostituita il 2026-09-29: il
+    // destinatario arrivava dall'app e il server lo usava senza verifiche.
+    // suspend fun sendRecapEmail(teamId: String, dayStartMillis: Long, dayEndMillis: Long, recipientEmail: String) {
+    //     post("send-recap-email", JSONObject()...put("recipientEmail", recipientEmail))
+    // }
+
+    /**
+     * Requisito 6/12: recap giornaliero con foto HD. v1.12.0 — 2026-09-29: il
+     * destinatario lo legge il server dalle Opzioni salvate (email
+     * amministrazione); ritorna l'indirizzo a cui è stato inviato.
+     */
+    suspend fun sendRecapEmail(teamId: String, dayStartMillis: Long, dayEndMillis: Long): String {
+        val response = post(
             "send-recap-email",
             JSONObject()
                 .put("teamId", teamId)
                 .put("dayStartMillis", dayStartMillis)
-                .put("dayEndMillis", dayEndMillis)
-                .put("recipientEmail", recipientEmail),
+                .put("dayEndMillis", dayEndMillis),
         )
+        return response.optString("to")
     }
 
-    /** Requisito 9: mandatino ore PDF (base64) già confermato dall'utente. */
+    /**
+     * Requisito 9: mandatino ore PDF (base64) già confermato dall'utente.
+     * v1.12.0 — 2026-09-29: il server spedisce SOLO all'email del cliente in
+     * anagrafica; [recipientEmail] serve come controllo (deve coincidere).
+     */
     suspend fun sendMandatino(
         teamId: String,
         clientId: String,

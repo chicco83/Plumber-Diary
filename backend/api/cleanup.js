@@ -1,4 +1,4 @@
-// api/cleanup.js — v1.0.0 — 2026-09-20 00:10 UTC
+// api/cleanup.js — v1.12.0 — 2026-09-29 (v1.0.0 — 2026-09-20 00:10 UTC)
 //
 // Pulizia programmata, chiamata una volta al giorno da un workflow GitHub
 // Actions (vedi .github/workflows/cleanup-cron.yml) invece che da un Cron
@@ -13,6 +13,15 @@
 //     inviata per un errore — non deve restare per sempre, vedi context.md).
 //  3. Cancella inviti scaduti/consumati.
 //  4. Cancella i contatori di quota più vecchi di qualche giorno.
+//
+// v1.12.0 — 2026-09-29:
+//  - cancellando una sosta scaduta si cancellano anche le sue foto su Storage
+//    (prima restavano le copie "display" per sempre, erodendo i 5 GB);
+//  - le copie "original" ora vengono cancellate SOLO qui (non più subito
+//    dopo l'invio del recap, vedi send-recap-email.js), trascorso il periodo
+//    di grazia di 7 giorni, così un reinvio del recap ha ancora le foto HD;
+//  - i metadati dei file arrivano già da getFiles(): niente più una chiamata
+//    getMetadata() per ogni file (lenta con molte foto, rischio timeout 30 s).
 //
 // Protetto da un token statico (stesso pattern di ha-status/cleanup nel
 // progetto gemello): questo endpoint non richiede un utente Firebase, è
@@ -48,7 +57,14 @@ module.exports = async (req, res) => {
         .collection('stops')
         .where('startedAt', '<', cutoff)
         .get();
+      // Versione precedente (v1.0.0 — 2026-09-20), sostituita il 2026-09-29:
+      // cancellava solo il documento, le foto della sosta restavano su Storage.
+      // for (const stopDoc of oldStopsSnap.docs) { await stopDoc.ref.delete(); stopsDeleted += 1; }
       for (const stopDoc of oldStopsSnap.docs) {
+        await storage
+          .bucket()
+          .deleteFiles({ prefix: `teams/${teamDoc.id}/members/${memberDoc.id}/stops/${stopDoc.id}/` })
+          .catch(() => {});
         await stopDoc.ref.delete();
         stopsDeleted += 1;
       }
@@ -71,8 +87,9 @@ module.exports = async (req, res) => {
   const [files] = await storage.bucket().getFiles({ prefix: 'teams/' });
   for (const file of files) {
     if (!file.name.endsWith('/original.jpg')) continue;
-    const [metadata] = await file.getMetadata();
-    const createdAt = new Date(metadata.timeCreated).getTime();
+    // Versione precedente (v1.0.0 — 2026-09-20), sostituita il 2026-09-29:
+    // const [metadata] = await file.getMetadata();
+    const createdAt = new Date(file.metadata.timeCreated).getTime();
     if (now - createdAt > PHOTO_GRACE_PERIOD_MS) {
       await file.delete().catch(() => {});
       photosDeleted += 1;

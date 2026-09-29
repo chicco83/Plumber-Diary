@@ -1,4 +1,4 @@
-// HomeScreen.kt — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-23)
+// HomeScreen.kt — v1.12.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-23)
 //
 // Versione precedente (v1.0.0 — 2026-09-20 00:10 UTC): stub con solo il titolo
 // "Giornata di oggi" e un TODO, sostituita il 2026-09-23 dall'implementazione
@@ -45,6 +45,7 @@ import com.plumberdiary.app.data.repository.ClientRepository
 import com.plumberdiary.app.data.repository.StopRepository
 import com.plumberdiary.app.location.LocationTrackingService
 import com.plumberdiary.app.recap.DailyDistanceCalculator
+import com.plumberdiary.app.session.SessionStore
 import com.plumberdiary.app.ui.Routes
 import com.plumberdiary.app.ui.common.Format
 import com.plumberdiary.app.ui.common.PlumberScaffold
@@ -128,6 +129,11 @@ fun HomeScreen(navController: NavHostController) {
                         val intent = Intent(context, LocationTrackingService::class.java)
                         if (trackingOn) context.stopService(intent) else ContextCompat.startForegroundService(context, intent)
                         trackingOn = !trackingOn
+                        // v1.12.0 — 2026-09-29: scelta salvata, così dopo un riavvio del
+                        // telefono BootRestartReceiver riparte solo se il tracciamento
+                        // era acceso (prima ripartiva sempre, anche fermato a mano).
+                        val enabled = trackingOn
+                        scope.launch { SessionStore(context).saveTrackingEnabled(enabled) }
                     }) {
                         Text(if (trackingOn) "Ferma tracciamento" else "Inizia tracciamento")
                     }

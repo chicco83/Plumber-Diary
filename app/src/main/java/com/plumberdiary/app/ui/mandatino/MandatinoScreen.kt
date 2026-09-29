@@ -1,4 +1,15 @@
-// MandatinoScreen.kt — v1.11.0 — 2026-09-29
+// MandatinoScreen.kt — v1.12.0 — 2026-09-29 (v1.11.0 — 2026-09-29)
+//
+// v1.12.0 — 2026-09-29, correzioni della review:
+//  - le PROPRIE soste senza cliente incluse perché nella posizione del cliente
+//    vengono associate al cliente quando il mandatino viene confermato (invio
+//    o condivisione). Prima entravano nel PDF firmato ma restavano "senza
+//    cliente": la sera nel recap si potevano assegnare a un altro cliente e
+//    documento firmato e dati divergevano. Quelle dei colleghi non si possono
+//    scrivere (regole Firestore): restano segnalate;
+//  - l'email del cliente, se corretta qui, viene salvata in anagrafica PRIMA
+//    dell'invio: il backend ora spedisce solo all'indirizzo in anagrafica;
+//  - senza sessione attiva un messaggio chiaro invece di "Caricamento" infinito.
 //
 // Requisiti 9 e 15, unificati: il "mandatino delle ore" è il documento che il
 // cliente accetta SUL POSTO a fine intervento — ore (tue e, a scelta, dei
@@ -99,6 +110,8 @@ fun MandatinoScreen(navController: NavHostController, clientId: String) {
     var stops by remember { mutableStateOf<List<Stop>>(emptyList()) }
     var technicians by remember { mutableStateOf<Map<String, String>>(emptyMap()) } // stopId -> tecnico
     var matchedByPosition by remember { mutableStateOf(0) }
+    // v1.12.0 — 2026-09-29: proprie soste incluse per posizione, da associare alla conferma.
+    var ownPositionMatched by remember { mutableStateOf<List<Stop>>(emptyList()) }
     var inProgress by remember { mutableStateOf(0) }
     var loading by remember { mutableStateOf(true) }
     var recipient by remember { mutableStateOf("") }
@@ -133,6 +146,7 @@ fun MandatinoScreen(navController: NavHostController, clientId: String) {
         val staleMillis = 30L * 60_000
         var byPosition = 0
         var open = 0
+        val ownMatched = mutableListOf<Stop>()
 
         suspend fun stopsAtClient(uid: String): List<Stop> =
             stopRepository.getStopsForDay(s.teamId, uid, fromMillis, now).mapNotNull { stop ->
@@ -141,7 +155,10 @@ fun MandatinoScreen(navController: NavHostController, clientId: String) {
                     stop.kind != StopKind.DEPOT && stop.kind != StopKind.BREAK &&
                     ClientMatcher.findSuggestedClient(stop.lat, stop.lon, listOf(c)) != null
                 if (!associated && !unassignedHere) return@mapNotNull null
-                if (unassignedHere) byPosition++
+                if (unassignedHere) {
+                    byPosition++
+                    if (uid == s.uid) ownMatched += stop // copia originale, orari non ritoccati
+                }
                 if (stop.endedAt > 0L) {
                     stop
                 } else {
@@ -167,11 +184,16 @@ fun MandatinoScreen(navController: NavHostController, clientId: String) {
         stops = collected.sortedBy { it.startedAt }
         technicians = if (includeTeam) names else emptyMap()
         matchedByPosition = byPosition
+        ownPositionMatched = ownMatched
         inProgress = open
     }
 
     LaunchedEffect(clientId) {
-        val s = session ?: return@LaunchedEffect
+        // Prima: val s = session ?: return@LaunchedEffect  (restava "Caricamento cliente..." per sempre)
+        val s = session ?: run {
+            message = "Nessuna sessione attiva: accedi e scegli la squadra."
+            return@LaunchedEffect
+        }
         try {
             val c = ClientRepository().getById(s.teamId, clientId)
             client = c
@@ -207,6 +229,38 @@ fun MandatinoScreen(navController: NavHostController, clientId: String) {
         }
     }
 
+    /**
+     * v1.12.0 — 2026-09-29: alla conferma (invio o condivisione) le proprie
+     * soste incluse per posizione vengono associate al cliente, così i dati
+     * coincidono con il documento accettato. Solo i campi utente: gli orari
+     * della sosta in corso restano del service.
+     */
+    suspend fun associatePositionMatched(c: ClientRecord) {
+        val s = session ?: return
+        for (stop in ownPositionMatched) {
+            stopRepository.saveUserEdits(
+                s.teamId, s.uid,
+                stop.copy(clientId = c.id, kind = StopKind.CLIENT, clientSuggested = true),
+            )
+        }
+        if (ownPositionMatched.isNotEmpty()) {
+            val ids = ownPositionMatched.map { it.id }.toSet()
+            stops = stops.map { if (it.id in ids) it.copy(clientId = c.id, kind = StopKind.CLIENT) else it }
+            ownPositionMatched = emptyList()
+        }
+    }
+
+    // Versione precedente (v1.11.0 — 2026-09-29), sostituita il 2026-09-29: inviava
+    // all'indirizzo digitato senza salvarlo e non associava le soste per posizione.
+    //
+    // fun send(withSignature: Boolean) {
+    //     ...
+    //     val file = buildPdf(c, withSignature)
+    //     val base64 = ...
+    //     backendClient.sendMandatino(s.teamId, c.id, to, periodLabel, base64)
+    //     ...
+    // }
+
     /** Invio all'email del cliente: parte SOLO da qui, dopo la conferma del tecnico (requisito 9). */
     fun send(withSignature: Boolean) {
         val s = session ?: return
@@ -216,10 +270,16 @@ fun MandatinoScreen(navController: NavHostController, clientId: String) {
         busy = true
         scope.launch {
             try {
+                // Email corretta sul posto: prima in anagrafica (il backend spedisce solo lì).
+                if (!to.equals(c.hoursReportEmail.trim(), ignoreCase = true)) {
+                    ClientRepository().updateHoursReportEmail(s.teamId, c.id, to)
+                    client = c.copy(hoursReportEmail = to)
+                }
                 val file = buildPdf(c, withSignature)
                 val base64 = withContext(Dispatchers.IO) { Base64.getEncoder().encodeToString(file.readBytes()) }
                 val periodLabel = if (period == Period.TODAY) Format.date(System.currentTimeMillis()) else period.label
                 backendClient.sendMandatino(s.teamId, c.id, to, periodLabel, base64)
+                associatePositionMatched(c)
                 message = if (withSignature) "Mandatino firmato inviato a $to." else "Mandatino non firmato inviato a $to."
             } catch (e: Exception) {
                 message = "Invio mandatino fallito: ${e.message}"
@@ -243,6 +303,7 @@ fun MandatinoScreen(navController: NavHostController, clientId: String) {
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
                 context.startActivity(Intent.createChooser(intent, "Condividi mandatino"))
+                associatePositionMatched(c) // v1.12.0 — 2026-09-29
             } catch (e: Exception) { message = "Errore: ${e.message}" }
         }
     }

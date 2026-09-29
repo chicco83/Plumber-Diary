@@ -1,4 +1,4 @@
-// ClientRepository.kt — v1.8.0 — 2026-09-29 (v1.7.0 — 2026-09-23: getById; v1.0.0 — 2026-09-20)
+// ClientRepository.kt — v1.12.0 — 2026-09-29 (v1.8.0 — 2026-09-29; v1.7.0 — 2026-09-23: getById; v1.0.0 — 2026-09-20)
 package com.plumberdiary.app.data.repository
 
 import com.google.firebase.firestore.FieldValue
@@ -66,6 +66,17 @@ class ClientRepository(
             ),
             SetOptions.merge(),
         ).await()
+    }
+
+    /**
+     * v1.12.0 — 2026-09-29: aggiorna la sola email del mandatino. Usata dalla
+     * schermata Mandatino quando il tecnico corregge l'indirizzo sul posto: il
+     * backend spedisce solo all'email in anagrafica, quindi va salvata prima.
+     */
+    suspend fun updateHoursReportEmail(teamId: String, clientId: String, email: String) {
+        firestore.document(FirestorePaths.client(teamId, clientId))
+            .update("hoursReportEmail", email)
+            .await()
     }
 
     suspend fun addPhotoIds(teamId: String, clientId: String, photoIds: List<String>) {
